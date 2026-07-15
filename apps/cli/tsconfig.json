@@ -3,7 +3,8 @@
   "compilerOptions": {
     "lib": ["ESNext", "DOM"],
     "jsx": "react-jsx",
-    "types": ["bun"]
+    "jsxImportSource": "@opentui/react",
+    "types": ["bun"],
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
 }
