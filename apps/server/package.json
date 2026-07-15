@@ -1,0 +1,22 @@
+{
+  "name": "server",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/jsonwebtoken": "^9.0.10",
+    "db": "*",
+    "shared": "*"
+  },
+  "peerDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.9.0",
+    "@types/node": "^26.1.1",
+    "hono": "^4.12.30",
+    "jsonwebtoken": "^9.0.3",
+    "zod": "^4.4.3"
+  }
+}
