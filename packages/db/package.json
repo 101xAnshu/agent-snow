@@ -6,7 +6,6 @@
   "scripts": {
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
-    "seed": "bun run prisma/seed.ts",
     "check-types": "tsc -p tsconfig.json --noEmit"
   },
   "exports": {
