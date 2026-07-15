@@ -5,6 +5,8 @@ import { logger } from "./lib/logger.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { sessionRoutes } from "./routes/sessions.js";
+import { chatRoutes } from "./routes/chat.js";
+import { requireAuth, type AuthenticatedEnv } from "./middleware/require-auth.js";
 
 const app = new Hono();
 
@@ -18,6 +20,11 @@ app.use("*", async (c, next) => {
 app.route("/health", healthRoutes);
 app.route("/auth", authRoutes);
 app.route("/sessions", sessionRoutes);
+
+const chat = new Hono<AuthenticatedEnv>();
+chat.use(requireAuth);
+chat.route("/", chatRoutes);
+app.route("/chat", chat);
 
 app.onError((err, c) => {
   logger.error("Unhandled error", { error: String(err) });
