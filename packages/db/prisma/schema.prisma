@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Session {
-  id        String   @id @default(cuid2())
+  id        String   @id @default(cuid())
   userId    String
   title     String
   createdAt DateTime @default(now())
@@ -19,7 +19,7 @@ model Session {
 }
 
 model Message {
-  id        String   @id @default(cuid2())
+  id        String   @id @default(cuid())
   sessionId String
   session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   role      String
