@@ -1,2 +1,2 @@
 export { getDb } from "./client.js";
-export type { Session, Message } from "../generated/prisma/client.js";
+export type { Session } from "../generated/prisma/client.js";
