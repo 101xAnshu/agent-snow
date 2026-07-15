@@ -6,6 +6,7 @@
     "allowJs": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "composite": true
   }
 }
