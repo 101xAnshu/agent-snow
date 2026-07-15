@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { getDb } from "db";
-import type { AuthenticatedEnv } from "../middleware/require-auth.js";
+import { requireAuth, type AuthenticatedEnv } from "../middleware/require-auth.js";
 
-const sessionRoutes = new Hono<AuthenticatedEnv>();
+const sessionRoutes = new Hono<AuthenticatedEnv>().use("*", requireAuth);
 
 const listQuerySchema = z.object({
   take: z.coerce.number().int().min(1).max(100).default(50),
