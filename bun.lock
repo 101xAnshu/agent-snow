@@ -12,10 +12,14 @@
     },
     "apps/cli": {
       "name": "cli",
+      "bin": {
+        "snow": "./bin/snow",
+      },
       "dependencies": {
         "@opentui/core": "^0.4.3",
         "@opentui/react": "^0.4.3",
         "@types/react": "^19.2.17",
+        "dotenv": "^17.4.2",
         "opentui-spinner": "^0.0.7",
         "react": "^19.2.7",
         "react-router": "^8.2.0",
@@ -190,6 +194,8 @@
     "db": ["db@workspace:packages/db"],
 
     "diff": ["diff@9.0.0", "", {}, "sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw=="],
+
+    "dotenv": ["dotenv@17.4.2", "", {}, "sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw=="],
 
     "ecdsa-sig-formatter": ["ecdsa-sig-formatter@1.0.11", "", { "dependencies": { "safe-buffer": "^5.0.1" } }, "sha512-nagl3RYrbNv6kQkeJIpt6NJZy8twLB/2vtz6yN9Z4vRKHN4/QZJIEbqohALSgwKdnksuY3k5Addp5lg8sVoVcQ=="],
 
