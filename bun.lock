@@ -18,8 +18,10 @@
       "dependencies": {
         "@opentui/core": "^0.4.3",
         "@opentui/react": "^0.4.3",
+        "@types/jsonwebtoken": "^9.0.10",
         "@types/react": "^19.2.17",
         "dotenv": "^17.4.2",
+        "jsonwebtoken": "^9.0.3",
         "opentui-spinner": "^0.0.7",
         "react": "^19.2.7",
         "react-router": "^8.2.0",
