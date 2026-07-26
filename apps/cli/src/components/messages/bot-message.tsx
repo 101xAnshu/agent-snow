@@ -1,68 +1,179 @@
+import prettyMs from "pretty-ms";
+import { EmptyBorder } from "../border.js";
 import { useTheme } from "../../providers/theme/index.js";
+import { Mode, type ModeType } from "shared";
+import { TextAttributes } from "@opentui/core";
 
-type Props = {
-  parts: Array<Record<string, unknown>>;
-  mode: string;
-  model: string;
-  durationMs?: number;
+type MessagePart = {
+  type: string;
+  text?: string;
+  toolCallId?: string;
+  toolName?: string;
+  input?: unknown;
+  state?: string;
+  errorText?: string;
+  [key: string]: unknown;
 };
 
-export function BotMessage({ parts, mode, model, durationMs }: Props) {
-  const { colors } = useTheme();
+type Props = {
+  parts: MessagePart[];
+  model: string;
+  mode: ModeType;
+  durationMs?: number;
+  streaming?: boolean;
+};
+
+type ToolPart = MessagePart & {
+  type: `tool-${string}` | "dynamic-tool";
+  toolCallId: string;
+  state: string;
+};
+
+function formatToolName(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+function isToolPart(part: MessagePart): part is ToolPart {
+  return part.type === "dynamic-tool" || part.type.startsWith("tool-");
+}
+
+function formatToolArgs(tc: ToolPart): string {
+  if (!("input" in tc) || tc.input == null) return "";
+  if (typeof tc.input !== "object") return String(tc.input);
+  return Object.values(tc.input).map(String).join(" ");
+}
+
+type PartGroup = {
+  type: string;
+  parts: MessagePart[];
+  key: string;
+};
+
+function groupConsecutiveParts(parts: MessagePart[]): PartGroup[] {
+  const groups: PartGroup[] = [];
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]!;
+    const lastGroup = groups[groups.length - 1];
+
+    if (lastGroup && lastGroup.type === part.type) {
+      lastGroup.parts.push(part);
+    } else {
+      const key = isToolPart(part)
+        ? `group-tc-${part.toolCallId}`
+        : `group-${part.type}-${i}`;
+      groups.push({ type: part.type, parts: [part], key });
+    }
+  }
+
+  return groups;
+}
+
+export function BotMessage({
+  parts,
+  model,
+  mode,
+  durationMs,
+  streaming = false,
+}: Props) {
+  const { colors, syntaxStyle } = useTheme();
   return (
-    <box flexDirection="column" marginTop={1}>
-      {parts.map((part, i) => {
-        if (part.type === "text") {
-          return (
-            <text key={i} fg={colors.foreground}>
-              {(part as { text: string }).text}
-            </text>
-          );
-        }
-        if (part.type === "tool-invocation") {
-          const inv = (
-            part as {
-              toolInvocation: {
-                toolName: string;
-                state: string;
-                args?: Record<string, unknown>;
-                output?: string;
-                error?: string;
-              };
+    <box width="100%" alignItems="center">
+      {groupConsecutiveParts(parts).map((group, i) => (
+        <box key={group.key} width="100%" paddingTop={i === 0 ? 0 : 1}>
+          {group.parts.map((part, j) => {
+            if (part.type === "reasoning") {
+              return (
+                <box
+                  key={`reasoning-${j}`}
+                  border={["left"]}
+                  borderColor={colors.thinkingBorder}
+                  customBorderChars={{
+                    ...EmptyBorder,
+                    vertical: "│",
+                  }}
+                  width="100%"
+                  paddingX={2}
+                >
+                  <text attributes={TextAttributes.DIM}>
+                    <em fg={colors.thinking}>Thinking:</em> {part.text}
+                  </text>
+                </box>
+              );
             }
-          ).toolInvocation;
-          return (
-            <box key={i} flexDirection="column" marginTop={1}>
-              <text fg={colors.accent}>
-                <b>Tool: {inv.toolName}</b>
-              </text>
-              {inv.state === "call" && <text fg="yellow">Running...</text>}
-              {inv.state === "result" && (
-                <text fg="green">
-                  ✓{" "}
-                  {typeof inv.output === "string"
-                    ? inv.output.slice(0, 100)
-                    : "Done"}
-                </text>
-              )}
-              {inv.state === "error" && <text fg="red">✗ {inv.error}</text>}
-            </box>
-          );
-        }
-        if (part.type === "reasoning") {
-          const r = part as { reasoning: string };
-          return (
-            <text key={i} fg={colors.muted}>
-              {(r.reasoning ?? "").slice(0, 200)}
+
+            if (isToolPart(part)) {
+              const toolName =
+                part.type === "dynamic-tool"
+                  ? part.toolName
+                  : part.type.slice("tool-".length);
+
+              return (
+                <box
+                  key={part.toolCallId}
+                  border={["left"]}
+                  borderColor={colors.thinkingBorder}
+                  customBorderChars={{
+                    ...EmptyBorder,
+                    vertical: "│",
+                  }}
+                  width="100%"
+                  paddingX={2}
+                >
+                  <text attributes={TextAttributes.DIM}>
+                    <em fg={colors.info}>{formatToolName(toolName ?? "")}</em>{" "}
+                    {formatToolArgs(part)}
+                    {part.state !== "output-available" &&
+                    part.state !== "output-error"
+                      ? " …"
+                      : ""}
+                    {part.state === "output-error"
+                      ? ` ${part.errorText}`
+                      : ""}
+                  </text>
+                </box>
+              );
+            }
+
+            if (part.type === "text") {
+              return (
+                <box key={`text-${j}`} paddingX={3} width="100%">
+                  <markdown content={part.text ?? ""} syntaxStyle={syntaxStyle} />
+                </box>
+              );
+            }
+
+            return null;
+          })}
+        </box>
+      ))}
+
+      <box paddingX={3} paddingY={1} gap={1} width="100%">
+        <box flexDirection="row" gap={2}>
+          <text fg={mode === Mode.PLAN ? colors.planMode : colors.primary}>
+            ◉
+          </text>
+          <box flexDirection="row" gap={1}>
+            <text>{mode === Mode.PLAN ? "Plan" : "Build"}</text>
+            <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
+              ›
             </text>
-          );
-        }
-        return null;
-      })}
-      <text fg={colors.muted} marginTop={1}>
-        {mode} · {model}
-        {durationMs ? ` · ${durationMs}ms` : ""}
-      </text>
+            <text attributes={TextAttributes.DIM}>{model}</text>
+            {durationMs != null && (
+              <>
+                <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
+                  ›
+                </text>
+                <text attributes={TextAttributes.DIM}>
+                  {prettyMs(durationMs)}
+                </text>
+              </>
+            )}
+          </box>
+        </box>
+      </box>
     </box>
   );
 }

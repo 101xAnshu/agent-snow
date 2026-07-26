@@ -1,28 +1,47 @@
-import { usePromptConfig } from "../../providers/prompt-config/index.js";
+import { useCallback } from "react";
 import { useDialog } from "../../providers/dialog/index.js";
-import { DialogSearchList } from "./dialog-search-list.js";
+import { DialogSearchList } from "../dialog-search-list.js";
+import { Mode, type ModeType } from "shared";
 
-export function AgentsDialog() {
-  const { toggleMode, mode } = usePromptConfig();
-  const { close } = useDialog();
-  const items = [
-    { label: "BUILD", description: "Full access — read, write, edit, execute" },
-    { label: "PLAN", description: "Read-only — analyze codebase" },
-  ];
+const AVAILABLE_MODES: ModeType[] = [Mode.BUILD, Mode.PLAN];
+
+type AgentsDialogContentProps = {
+  currentMode: ModeType;
+  onSelectMode: (mode: ModeType) => void;
+};
+
+function getModeLabel(mode: ModeType) {
+  return mode === Mode.PLAN ? "Plan" : "Build";
+}
+
+export const AgentsDialogContent = ({ 
+  currentMode, 
+  onSelectMode 
+}: AgentsDialogContentProps) => {
+  const dialog = useDialog();
+
+  const handleSelect = useCallback(
+    (nextMode: ModeType) => {
+      onSelectMode(nextMode);
+      dialog.close();
+    },
+    [onSelectMode, dialog],
+  );
+
   return (
     <DialogSearchList
-      items={items}
-      keyExtractor={(i) => i.label}
-      renderItem={(i, h) => (
-        <text fg={h ? "white" : "gray"}>
-          {i.label === mode ? "✓ " : "  "}
-          {i.label} - {i.description}
+      items={AVAILABLE_MODES}
+      onSelect={handleSelect}
+      filterFn={(item, query) => getModeLabel(item).toLowerCase().includes(query.toLowerCase())}
+      renderItem={(item, isSelected) => (
+        <text selectable={false} fg={isSelected ? "black" : "white"}>
+          {item === currentMode ? " • " : "   "}
+          {getModeLabel(item)}
         </text>
       )}
-      onSelect={(item) => {
-        if (item.label !== mode) toggleMode();
-        close();
-      }}
+      getKey={(item) => item}
+      placeholder="Search agents"
+      emptyText="No matching agents"
     />
   );
-}
+};

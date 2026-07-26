@@ -1,4 +1,5 @@
 import { loadAuth, clearAuth } from "./auth.js";
+import { getErrorMessage } from "./http-errors.js";
 
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
 
@@ -49,17 +50,30 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ title }),
     });
+    if (!res.ok) throw new Error(await getErrorMessage(res));
     return res.json() as Promise<{ session: { id: string; title: string } }>;
   },
   getSession: async (id: string) => {
     const res = await fetchWithRetry(`/sessions/${id}`);
+    if (!res.ok) throw new Error(await getErrorMessage(res));
     return res.json() as Promise<{ session: Record<string, unknown> }>;
   },
   listSessions: async (take = 50, skip = 0) => {
     const res = await fetchWithRetry(`/sessions?take=${take}&skip=${skip}`);
+    if (!res.ok) throw new Error(await getErrorMessage(res));
     return res.json() as Promise<{
       sessions: Array<Record<string, unknown>>;
       total: number;
     }>;
+  },
+  getCheckoutUrl: async () => {
+    const res = await fetchWithRetry("/billing/checkout");
+    if (!res.ok) throw new Error(await getErrorMessage(res));
+    return res.json() as Promise<{ checkoutUrl: string }>;
+  },
+  getBillingPortalUrl: async () => {
+    const res = await fetchWithRetry("/billing/portal");
+    if (!res.ok) throw new Error(await getErrorMessage(res));
+    return res.json() as Promise<{ portalUrl: string }>;
   },
 };

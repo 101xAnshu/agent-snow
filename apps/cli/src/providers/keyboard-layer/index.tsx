@@ -16,13 +16,18 @@ type KeyboardLayerValue = {
   push: (id: string, responder: Responder) => void;
   pop: (id: string) => void;
   isTopLayer: (id: string) => boolean;
+  setResponder: (id: string, responder: Responder | null) => void;
   currentLayerId: string | null;
 };
 
 const KeyboardLayerContext = createContext<KeyboardLayerValue | null>(null);
 
+function defaultResponder(): boolean {
+  return false;
+}
+
 export function KeyboardLayerProvider({ children }: { children: ReactNode }) {
-  const [stack, setStack] = useState<Layer[]>([]);
+  const [stack, setStack] = useState<Layer[]>([{ id: "base", responder: defaultResponder }]);
   const stackRef = useRef(stack);
   stackRef.current = stack;
   const renderer = useRenderer();
@@ -43,6 +48,15 @@ export function KeyboardLayerProvider({ children }: { children: ReactNode }) {
     [stack],
   );
 
+  const setResponder = useCallback(
+    (id: string, responder: Responder | null) => {
+      setStack((prev) =>
+        prev.map((l) => (l.id === id ? { ...l, responder: responder ?? defaultResponder } : l)),
+      );
+    },
+    [],
+  );
+
   useKeyboard((key) => {
     if (key.ctrl && key.name === "c") {
       for (let i = stackRef.current.length - 1; i >= 0; i--) {
@@ -58,6 +72,7 @@ export function KeyboardLayerProvider({ children }: { children: ReactNode }) {
     push,
     pop,
     isTopLayer,
+    setResponder,
     currentLayerId:
       stack.length > 0 ? (stack[stack.length - 1]?.id ?? null) : null,
   };

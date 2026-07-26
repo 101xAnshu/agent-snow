@@ -12,29 +12,27 @@ import type { ToastVariant, ToastOptions } from "./types.js";
 import { DEFAULT_DURATION } from "./types.js";
 
 type ToastContextValue = {
-  show: (message: string, options?: ToastOptions) => void;
+  show: (options: ToastOptions) => void;
 };
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-const VARIANT_COLORS: Record<ToastVariant, string> = {
-  success: "#9ece6a",
-  error: "#f7768e",
-  info: "#7aa2f7",
-};
-
 export function ToastProvider({ children }: { children: ReactNode }) {
   const { colors } = useTheme();
-  const [message, setMessage] = useState<string | null>(null);
-  const [variant, setVariant] = useState<ToastVariant>("info");
+  const [currentToast, setCurrentToast] = useState<ToastOptions | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const show = useCallback((msg: string, options?: ToastOptions) => {
+  const variantColors: Record<ToastVariant, string> = {
+    success: colors.success,
+    error: colors.error,
+    info: colors.info,
+  };
+
+  const show = useCallback((options: ToastOptions) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setMessage(msg);
-    setVariant(options?.variant ?? "info");
+    setCurrentToast(options);
     timeoutRef.current = setTimeout(
-      () => setMessage(null),
-      options?.duration ?? DEFAULT_DURATION,
+      () => setCurrentToast(null),
+      options.duration ?? DEFAULT_DURATION,
     );
     timeoutRef.current?.unref();
   }, []);
@@ -44,7 +42,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {message && (
+      {currentToast && (
         <box
           position="absolute"
           top={0}
@@ -55,12 +53,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <box
             backgroundColor={colors.surface}
             borderStyle="single"
-            borderColor={VARIANT_COLORS[variant]}
+            borderColor={variantColors[currentToast.variant ?? "info"]}
             border
             paddingX={1}
           >
-            <text fg={VARIANT_COLORS[variant]}>{variant.toUpperCase()}</text>
-            <text fg={colors.foreground}> {message}</text>
+            <text fg={variantColors[currentToast.variant ?? "info"]}>{(currentToast.variant ?? "info").toUpperCase()}</text>
+            <text fg={colors.foreground}> {currentToast.message}</text>
           </box>
         </box>
       )}

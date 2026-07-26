@@ -1,58 +1,64 @@
+import { TextAttributes } from "@opentui/core";
 import type { ReactNode } from "react";
-import { useTheme } from "../providers/theme/index.js";
+import { InputBar } from "./input-bar.js";
+import { Spinner } from "./spinner.js";
 import { usePromptConfig } from "../providers/prompt-config/index.js";
-import { useKeyboard } from "@opentui/react";
 
 type Props = {
-  children: ReactNode;
+  children?: ReactNode;
   onSubmit: (text: string) => void;
-  isLoading: boolean;
-  onInterrupt: () => void;
+  inputDisabled?: boolean;
+  loading?: boolean;
+  interruptible?: boolean;
 };
 
 export function SessionShell({
   children,
   onSubmit,
-  isLoading,
-  onInterrupt,
+  inputDisabled = false,
+  loading = false,
+  interruptible = false,
 }: Props) {
-  const { colors } = useTheme();
-  const { mode, model } = usePromptConfig();
-
-  useKeyboard((key: { name: string }) => {
-    if (key.name === "escape" && isLoading) {
-      onInterrupt();
-      return true;
-    }
-    return false;
-  });
+  const { mode } = usePromptConfig();
 
   return (
-    <box flexDirection="column" width="100%" height="100%">
-      <scrollbox flexGrow={1} flexShrink={1}>
-        {children}
+    <box
+      flexDirection="column"
+      flexGrow={1}
+      width="100%"
+      height="100%"
+      paddingY={1}
+      paddingX={2}
+      gap={1}
+    >
+      <scrollbox flexGrow={1} width="100%" stickyScroll stickyStart="bottom">
+        <box>{children}</box>
       </scrollbox>
-      <box
-        height={3}
-        borderStyle="single"
-        border={["top"]}
-        borderColor={colors.border}
-      >
-        <inputbar
-          onSubmit={onSubmit}
-          placeholder="Type a message..."
-          disabled={isLoading}
-        />
+      <box flexShrink={0}>
+        <InputBar onSubmit={onSubmit} disabled={inputDisabled} />
       </box>
-      <box height={1}>
-        {isLoading && (
-          <text fg="yellow">
-            Thinking... <text fg={colors.muted}>esc to interrupt</text>
-          </text>
-        )}
-        <text fg={colors.muted}>
-          {mode} · {model}
-        </text>
+      <box
+        flexShrink={0}
+        flexDirection="row"
+        justifyContent="space-between"
+        width="100%"
+        height={1}
+        gap={2}
+        paddingLeft={1}
+      >
+        <box flexDirection="row" alignItems="center" gap={2}>
+          {loading ? (
+            <>
+              <Spinner mode={mode} />
+              {interruptible ? <text>esc to interrupt</text> : null}
+            </>
+          ) : null}
+        </box>
+
+        <box flexDirection="row" gap={1} flexShrink={0} marginLeft="auto">
+          <text>tab</text>
+          <text attributes={TextAttributes.DIM}>agents</text>
+        </box>
       </box>
     </box>
   );

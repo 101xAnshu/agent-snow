@@ -1,28 +1,58 @@
-import { THEMES } from "../../themes/index.js";
-import { useTheme } from "../../providers/theme/index.js";
+import { useCallback, useEffect, useRef } from "react";
 import { useDialog } from "../../providers/dialog/index.js";
-import { DialogSearchList } from "./dialog-search-list.js";
+import { useTheme } from "../../providers/theme/index.js";
+import { DialogSearchList } from "../dialog-search-list.js";
+import { THEMES } from "../../themes/index.js";
+import type { Theme } from "../../themes/index.js";
 
-export function ThemeDialog() {
-  const { currentTheme, setTheme } = useTheme();
-  const { close } = useDialog();
+export const ThemeDialogContent = () => {
+  const dialog = useDialog();
+  const { setTheme, currentTheme } = useTheme();
+  const originalThemeRef = useRef(currentTheme);
+  const confirmedRef = useRef(false);
+
+  // Revert to original theme if the user dismisses without confirming
+  useEffect(() => {
+    return () => {
+      if (!confirmedRef.current) {
+        setTheme(originalThemeRef.current);
+      }
+    };
+  }, [setTheme]);
+
+  const handleSelect = useCallback(
+    (theme: Theme) => {
+      confirmedRef.current = true;
+      setTheme(theme.name);
+      dialog.close();
+    },
+    [setTheme, dialog],
+  );
+
+  const handleHighlight = useCallback(
+    (theme: Theme) => {
+      setTheme(theme.name);
+    },
+    [setTheme],
+  );
+
   return (
     <DialogSearchList
       items={THEMES}
-      keyExtractor={(t) => t.name}
-      renderItem={(t, h) => (
-        <text fg={h ? "white" : "gray"}>
-          {t.name === currentTheme ? "✓ " : "  "}
-          {t.name}
+      onSelect={handleSelect}
+      onHighlight={handleHighlight}
+      filterFn={(t, query) => t.name.toLowerCase().includes(query.toLowerCase())}
+      renderItem={(theme, isSelected) => (
+        <text selectable={false} fg={isSelected ? "black" : "white"}>
+          {theme.name === originalThemeRef.current
+            ? "\u0020\u2022\u0020"
+            : "\u0020\u0020\u0020"}
+          {theme.name}
         </text>
       )}
-      onSelect={(theme) => {
-        setTheme(theme.name);
-        close();
-      }}
-      filterItems={(items, q) =>
-        items.filter((t) => t.name.toLowerCase().includes(q.toLowerCase()))
-      }
+      getKey={(t) => t.name}
+      placeholder="Search themes"
+      emptyText="No matching themes"
     />
   );
-}
+};

@@ -1,32 +1,40 @@
-import { SUPPORTED_CHAT_MODELS } from "shared";
-import { usePromptConfig } from "../../providers/prompt-config/index.js";
+import { useCallback } from "react";
 import { useDialog } from "../../providers/dialog/index.js";
-import { DialogSearchList } from "./dialog-search-list.js";
+import { DialogSearchList } from "../dialog-search-list.js";
+import type { SupportedChatModelId } from "shared";
 
-export function ModelsDialog() {
-  const { model, setModel } = usePromptConfig();
-  const { close } = useDialog();
+type ModelsDialogContentProps = {
+  models: SupportedChatModelId[];
+  onSelectModel: (modelId: SupportedChatModelId) => void;
+};
+
+export const ModelsDialogContent = ({ 
+  models, 
+  onSelectModel 
+}: ModelsDialogContentProps) => {
+  const dialog = useDialog();
+
+  const handleSelect = useCallback(
+    (modelId: SupportedChatModelId) => {
+      onSelectModel(modelId);
+      dialog.close();
+    },
+    [dialog, onSelectModel],
+  );
+
   return (
     <DialogSearchList
-      items={[...SUPPORTED_CHAT_MODELS]}
-      keyExtractor={(m) => m.id}
-      renderItem={(m, h) => (
-        <text fg={h ? "white" : "gray"}>
-          {m.id === model ? "✓ " : "  "}
-          {m.meta.displayName}
+      items={models}
+      onSelect={handleSelect}
+      filterFn={(modelId, query) => modelId.toLowerCase().includes(query.toLowerCase())}
+      renderItem={(modelId, isSelected) => (
+        <text selectable={false} fg={isSelected ? "black" : "white"}>
+          {modelId}
         </text>
       )}
-      onSelect={(item) => {
-        setModel(item.id);
-        close();
-      }}
-      filterItems={(items, q) =>
-        items.filter(
-          (m) =>
-            m.meta.displayName.toLowerCase().includes(q.toLowerCase()) ||
-            m.id.includes(q),
-        )
-      }
+      getKey={(modelId) => modelId}
+      placeholder="Search models"
+      emptyText="No matching models"
     />
   );
-}
+};

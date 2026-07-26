@@ -1,3 +1,5 @@
+import { unlink } from "node:fs/promises";
+
 const AUTH_PATH = `${process.env.HOME ?? process.env.USERPROFILE}/.snow/auth.json`;
 
 export type AuthData = { token: string };
@@ -19,7 +21,7 @@ export async function saveAuth(auth: AuthData): Promise<void> {
 
 export async function clearAuth(): Promise<void> {
   try {
-    await Bun.write(AUTH_PATH, JSON.stringify({ token: "" }, null, 2));
+    await unlink(AUTH_PATH);
   } catch {
     /* ignore */
   }

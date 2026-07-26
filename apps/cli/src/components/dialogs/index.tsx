@@ -1,4 +1,4 @@
-export { AgentsDialog } from "./agents-dialog.js";
-export { ModelsDialog } from "./models-dialog.js";
-export { SessionsDialog } from "./sessions-dialog.js";
-export { ThemeDialog } from "./theme-dialog.js";
+export { ThemeDialogContent } from "./theme-dialog.js";
+export { SessionsDialogContent } from "./sessions-dialog.js";
+export { AgentsDialogContent } from "./agents-dialog.js";
+export { ModelsDialogContent } from "./models-dialog.js";

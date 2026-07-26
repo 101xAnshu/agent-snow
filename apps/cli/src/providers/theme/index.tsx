@@ -8,8 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import { SyntaxStyle } from "@opentui/core";
-import { THEMES, DEFAULT_THEME } from "../../themes/index.js";
-import type { ThemeColors } from "../../themes/index.js";
+import { THEMES, DEFAULT_THEME, type Theme } from "../../themes/index.js";
+import type { ThemeColors, SyntaxStyle as SyntaxStyleType } from "../../themes/index.js";
 
 type ThemeContextValue = {
   colors: ThemeColors;
@@ -52,26 +52,37 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     saveTheme(name);
   }, []);
 
-  const colors = useMemo(
+  const theme = useMemo(
     () => THEMES.find((t) => t.name === themeName) ?? DEFAULT_THEME,
     [themeName],
   );
+
   const syntaxStyle = useMemo(
     () =>
       SyntaxStyle.fromStyles({
-        keyword: { fg: colors.syntax.keyword },
-        string: { fg: colors.syntax.string },
-        number: { fg: colors.syntax.number },
-        comment: { fg: colors.syntax.comment },
-        function: { fg: colors.syntax.function },
-        type: { fg: colors.syntax.type },
+        keyword: { fg: theme.syntaxStyle.keyword },
+        string: { fg: theme.syntaxStyle.string },
+        number: { fg: theme.syntaxStyle.number },
+        comment: { fg: theme.syntaxStyle.comment },
+        function: { fg: theme.syntaxStyle.function },
+        type: { fg: theme.syntaxStyle.type },
+        default: {},
+        "markup.raw": { fg: theme.colors.info },
+        "markup.strong": { fg: theme.colors.primary, bold: true },
+        "markup.italic": { italic: true },
+        "markup.strikethrough": { dim: true },
+        "markup.link": { fg: theme.colors.selection },
+        "markup.link.label": { fg: theme.colors.primary },
+        "markup.link.url": { fg: theme.colors.selection, underline: true },
+        "markup.heading": { fg: theme.colors.primary, bold: true },
+        conceal: { fg: theme.colors.dimSeparator, dim: true },
       }),
-    [colors],
+    [theme],
   );
 
   const value = useMemo(
-    () => ({ colors, currentTheme: themeName, setTheme, syntaxStyle }),
-    [colors, themeName, setTheme, syntaxStyle],
+    () => ({ colors: theme.colors, currentTheme: themeName, setTheme, syntaxStyle }),
+    [theme.colors, themeName, setTheme, syntaxStyle],
   );
 
   return (

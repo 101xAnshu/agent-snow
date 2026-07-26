@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useLocation } from "react-router";
+import { useKeyboard } from "@opentui/react";
 import { z } from "zod";
 import { api } from "../lib/api-client.js";
 import { useChat } from "../hooks/use-chat.js";
 import { usePromptConfig } from "../providers/prompt-config/index.js";
+import { useKeyboardLayer } from "../providers/keyboard-layer/index.js";
 import { SessionShell } from "../components/session-shell.js";
 import {
   UserMessage,
@@ -21,6 +23,7 @@ export function Session() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const { mode, model } = usePromptConfig();
+  const { isTopLayer } = useKeyboardLayer();
   const [initialLoading, setInitialLoading] = useState(true);
   const [dbMessages, setDbMessages] = useState<Array<
     Record<string, unknown>
@@ -50,6 +53,12 @@ export function Session() {
   const chat = useChat({ sessionId: id ?? "", initialMessages });
 
   useEffect(() => {
+    return () => {
+      void chat.abort();
+    };
+  }, [chat.abort]);
+
+  useEffect(() => {
     if (state.initialMessage && chat.messages.length === 0) {
       chat.submit({ userText: state.initialMessage, mode, model });
     }
@@ -60,12 +69,24 @@ export function Session() {
     [chat, mode, model],
   );
 
+  // Handle escape key to interrupt streaming
+  useKeyboard((key) => {
+    if (
+      key.name === "escape" &&
+      isTopLayer("base") &&
+      chat.status === "streaming"
+    ) {
+      key.preventDefault();
+      chat.interrupt();
+    }
+  });
+
   if (initialLoading) {
     return (
       <SessionShell
         onSubmit={handleSubmit}
-        isLoading={false}
-        onInterrupt={() => {}}
+        inputDisabled
+        loading
       >
         <text>Loading session...</text>
       </SessionShell>
@@ -75,12 +96,12 @@ export function Session() {
   return (
     <SessionShell
       onSubmit={handleSubmit}
-      isLoading={chat.status === "submitted" || chat.status === "streaming"}
-      onInterrupt={chat.interrupt}
+      loading={chat.status === "submitted" || chat.status === "streaming"}
+      interruptible={chat.status === "submitted" || chat.status === "streaming"}
     >
       {chat.messages.map((msg) => {
         const meta = msg.metadata as
-          { mode?: string; model?: string; durationMs?: number } | undefined;
+          { mode?: "PLAN" | "BUILD"; model?: string; durationMs?: number } | undefined;
         if (msg.role === "user")
           return (
             <UserMessage

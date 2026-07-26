@@ -91,6 +91,7 @@ export function useChat({ sessionId, initialMessages }: UseChatProps) {
     }) => {
       chat.sendMessage({ text: userText, metadata: { mode, model } });
     },
+    abort: chat.stop,
     interrupt: chat.stop,
   };
 }

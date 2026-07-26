@@ -27,7 +27,6 @@ async function acquire(): Promise<void> {
     return;
   }
   await new Promise<void>((r) => queue.push(r));
-  activeCount++;
 }
 
 function release(): void {

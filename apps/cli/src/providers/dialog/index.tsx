@@ -7,6 +7,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { RGBA } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useTheme } from "../theme/index.js";
 import { useKeyboardLayer } from "../keyboard-layer/index.js";
@@ -20,7 +21,7 @@ const DialogContext = createContext<DialogContextValue | null>(null);
 
 export function DialogProvider({ children }: { children: ReactNode }) {
   const [currentDialog, setCurrentDialog] = useState<DialogConfig | null>(null);
-  const { push, pop } = useKeyboardLayer();
+  const { push, pop, isTopLayer } = useKeyboardLayer();
   const { colors } = useTheme();
   const { width, height } = useTerminalDimensions();
 
@@ -48,7 +49,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   closeRef.current = close;
 
   useKeyboard((key: { name: string }) => {
-    if (key.name === "escape" && dialogRef.current) {
+    if (key.name === "escape" && dialogRef.current && isTopLayer("dialog")) {
       closeRef.current();
       return true;
     }
@@ -67,9 +68,10 @@ export function DialogProvider({ children }: { children: ReactNode }) {
           left={0}
           width={width}
           height={height}
-          backgroundColor="rgba(0,0,0,0.5)"
+          backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
           justifyContent="center"
           alignItems="center"
+          onMouseDown={() => close()}
         >
           <box
             backgroundColor={colors.surface}
@@ -81,6 +83,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
             maxWidth={Math.floor(width * 0.7)}
             maxHeight={Math.floor(height * 0.7)}
             flexDirection="column"
+            onMouseDown={(e) => e.stopPropagation()}
           >
             <text fg={colors.foreground}>
               <b>{currentDialog.title}</b>
