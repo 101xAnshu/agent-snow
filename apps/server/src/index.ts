@@ -7,6 +7,7 @@ import { authRoutes } from "./routes/auth.js";
 import { sessionRoutes } from "./routes/sessions.js";
 import { chatRoutes } from "./routes/chat.js";
 import { requireAuth, type AuthenticatedEnv } from "./middleware/require-auth.js";
+import { billingRoutes } from "./routes/billing.js";
 
 const app = new Hono();
 
@@ -21,10 +22,15 @@ app.route("/health", healthRoutes);
 app.route("/auth", authRoutes);
 app.route("/sessions", sessionRoutes);
 
-const chat = new Hono<AuthenticatedEnv>();
-chat.use(requireAuth);
-chat.route("/", chatRoutes);
-app.route("/chat", chat);
+function protectedRoute(path: string, routes: Hono<AuthenticatedEnv>) {
+  const sub = new Hono<AuthenticatedEnv>();
+  sub.use(requireAuth);
+  sub.route("/", routes);
+  app.route(path, sub);
+}
+
+protectedRoute("/chat", chatRoutes);
+protectedRoute("/billing", billingRoutes);
 
 app.onError((err, c) => {
   logger.error("Unhandled error", { error: String(err) });
