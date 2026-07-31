@@ -166,9 +166,18 @@ async function bashTool(
   args: z.infer<typeof toolInputSchemas.bash>,
 ) {
   const isWin = process.platform === "win32";
-  const shell = isWin ? ["cmd.exe", "/c"] : ["bash", "-c"];
-  const proc = Bun.spawn([...shell, args.command], {
+  const argv = isWin
+    ? [
+        (await Bun.which("pwsh")) ?? "powershell.exe",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `${args.command}; exit $LASTEXITCODE`,
+      ]
+    : ["bash", "-c", args.command];
+  const proc = Bun.spawn(argv, {
     cwd,
+    stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
   });
