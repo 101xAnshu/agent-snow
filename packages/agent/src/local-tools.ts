@@ -175,6 +175,11 @@ async function findWindowsBash(): Promise<string | null> {
   return fromPath ?? null;
 }
 
+export async function findBashBinary(): Promise<string | null> {
+  if (process.platform !== "win32") return "bash";
+  return findWindowsBash();
+}
+
 function killProcessTree(pid: number) {
   if (process.platform === "win32") {
     try {

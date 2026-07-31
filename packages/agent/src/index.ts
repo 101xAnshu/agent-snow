@@ -1,4 +1,4 @@
-export { executeLocalTool } from "./local-tools.js";
+export { executeLocalTool, findBashBinary } from "./local-tools.js";
 export type { ModeType } from "shared";
 export { buildSystemPrompt } from "./system-prompt.js";
 export { resolveModel } from "./models.js";
