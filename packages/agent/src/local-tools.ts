@@ -1,16 +1,14 @@
 import { readFile, writeFile, readdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, sep } from "node:path";
 import { toolInputSchemas, Mode } from "shared";
 import type { ModeType } from "shared";
 import { z } from "zod";
 
 // ── Path safety ────────────────────────────────────────────────
 
-const cwd = process.cwd();
-
-function resolveInsideCwd(inputPath: string): string {
+function resolveInsideCwd(cwd: string, inputPath: string): string {
   const resolved = resolve(cwd, inputPath);
-  if (!resolved.startsWith(cwd))
+  if (resolved !== cwd && !resolved.startsWith(cwd + sep))
     throw new Error(`Path traversal detected: ${inputPath}`);
   return resolved;
 }
@@ -49,8 +47,11 @@ function withTimeout<T>(promise: Promise<T>, ms?: number): Promise<T> {
 
 // ── Tool implementations ───────────────────────────────────────
 
-async function readFileTool(args: z.infer<typeof toolInputSchemas.readFile>) {
-  const filePath = resolveInsideCwd(args.filePath);
+async function readFileTool(
+  cwd: string,
+  args: z.infer<typeof toolInputSchemas.readFile>,
+) {
+  const filePath = resolveInsideCwd(cwd, args.filePath);
   const content = await readFile(filePath, "utf-8");
   const lines = content.split("\n");
   if (args.offset !== undefined || args.limit !== undefined) {
@@ -65,17 +66,21 @@ async function readFileTool(args: z.infer<typeof toolInputSchemas.readFile>) {
 }
 
 async function listDirTool(
+  cwd: string,
   args: z.infer<typeof toolInputSchemas.listDirectory>,
 ) {
-  const dirPath = resolveInsideCwd(args.path);
+  const dirPath = resolveInsideCwd(cwd, args.path);
   const entries = await readdir(dirPath, { withFileTypes: true });
   return entries
     .map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
     .join("\n");
 }
 
-async function globTool(args: z.infer<typeof toolInputSchemas.glob>) {
-  const searchPath = args.path ? resolveInsideCwd(args.path) : cwd;
+async function globTool(
+  cwd: string,
+  args: z.infer<typeof toolInputSchemas.glob>,
+) {
+  const searchPath = args.path ? resolveInsideCwd(cwd, args.path) : cwd;
   const results: string[] = [];
   for await (const match of new Bun.Glob(args.pattern).scan({
     cwd: searchPath,
@@ -86,8 +91,11 @@ async function globTool(args: z.infer<typeof toolInputSchemas.glob>) {
   return results.join("\n");
 }
 
-async function grepTool(args: z.infer<typeof toolInputSchemas.grep>) {
-  const searchPath = args.path ? resolveInsideCwd(args.path) : cwd;
+async function grepTool(
+  cwd: string,
+  args: z.infer<typeof toolInputSchemas.grep>,
+) {
+  const searchPath = args.path ? resolveInsideCwd(cwd, args.path) : cwd;
   const pattern = new RegExp(args.pattern);
   const include = args.include ? new Bun.Glob(args.include) : null;
   const results: string[] = [];
@@ -126,14 +134,20 @@ async function grepTool(args: z.infer<typeof toolInputSchemas.grep>) {
   return results.join("\n");
 }
 
-async function writeFileTool(args: z.infer<typeof toolInputSchemas.writeFile>) {
-  const filePath = resolveInsideCwd(args.filePath);
+async function writeFileTool(
+  cwd: string,
+  args: z.infer<typeof toolInputSchemas.writeFile>,
+) {
+  const filePath = resolveInsideCwd(cwd, args.filePath);
   await writeFile(filePath, args.content, "utf-8");
   return `Written ${Buffer.byteLength(args.content, "utf-8")} bytes to ${filePath}`;
 }
 
-async function editFileTool(args: z.infer<typeof toolInputSchemas.editFile>) {
-  const filePath = resolveInsideCwd(args.filePath);
+async function editFileTool(
+  cwd: string,
+  args: z.infer<typeof toolInputSchemas.editFile>,
+) {
+  const filePath = resolveInsideCwd(cwd, args.filePath);
   const content = await readFile(filePath, "utf-8");
   const idx = content.indexOf(args.oldString);
   if (idx === -1) throw new Error(`Could not find oldString in ${filePath}`);
@@ -147,7 +161,10 @@ async function editFileTool(args: z.infer<typeof toolInputSchemas.editFile>) {
   return `Edited ${filePath}`;
 }
 
-async function bashTool(args: z.infer<typeof toolInputSchemas.bash>) {
+async function bashTool(
+  cwd: string,
+  args: z.infer<typeof toolInputSchemas.bash>,
+) {
   const isWin = process.platform === "win32";
   const shell = isWin ? ["cmd.exe", "/c"] : ["bash", "-c"];
   const proc = Bun.spawn([...shell, args.command], {
@@ -173,14 +190,21 @@ async function bashTool(args: z.infer<typeof toolInputSchemas.bash>) {
 
 // ── Dispatcher ─────────────────────────────────────────────────
 
-const toolImpl: Record<string, (args: unknown) => Promise<string>> = {
-  readFile: (a) => readFileTool(a as z.infer<typeof toolInputSchemas.readFile>),
-  listDirectory: (a) => listDirTool(a as z.infer<typeof toolInputSchemas.listDirectory>),
-  glob: (a) => globTool(a as z.infer<typeof toolInputSchemas.glob>),
-  grep: (a) => grepTool(a as z.infer<typeof toolInputSchemas.grep>),
-  writeFile: (a) => writeFileTool(a as z.infer<typeof toolInputSchemas.writeFile>),
-  editFile: (a) => editFileTool(a as z.infer<typeof toolInputSchemas.editFile>),
-  bash: (a) => bashTool(a as z.infer<typeof toolInputSchemas.bash>),
+const toolImpl: Record<
+  string,
+  (cwd: string, args: unknown) => Promise<string>
+> = {
+  readFile: (cwd, a) =>
+    readFileTool(cwd, a as z.infer<typeof toolInputSchemas.readFile>),
+  listDirectory: (cwd, a) =>
+    listDirTool(cwd, a as z.infer<typeof toolInputSchemas.listDirectory>),
+  glob: (cwd, a) => globTool(cwd, a as z.infer<typeof toolInputSchemas.glob>),
+  grep: (cwd, a) => grepTool(cwd, a as z.infer<typeof toolInputSchemas.grep>),
+  writeFile: (cwd, a) =>
+    writeFileTool(cwd, a as z.infer<typeof toolInputSchemas.writeFile>),
+  editFile: (cwd, a) =>
+    editFileTool(cwd, a as z.infer<typeof toolInputSchemas.editFile>),
+  bash: (cwd, a) => bashTool(cwd, a as z.infer<typeof toolInputSchemas.bash>),
 };
 
 const READ_ONLY_TOOLS = ["readFile", "listDirectory", "glob", "grep"];
@@ -189,6 +213,7 @@ export async function executeLocalTool(
   toolName: string,
   args: unknown,
   mode: ModeType,
+  cwd: string = process.cwd(),
 ): Promise<string> {
   if (mode === Mode.PLAN && !READ_ONLY_TOOLS.includes(toolName)) {
     throw new Error(`Tool "${toolName}" is not available in PLAN mode`);
@@ -197,7 +222,7 @@ export async function executeLocalTool(
   if (!impl) throw new Error(`Unknown tool: ${toolName}`);
   await acquire();
   try {
-    return await impl(args);
+    return await impl(cwd, args);
   } finally {
     release();
   }

@@ -25,6 +25,7 @@
     "@hono/zod-validator": "^0.9.0",
     "@polar-sh/sdk": "^0.49.0",
     "@types/node": "^26.1.1",
+    "agent": "*",
     "ai": "^7.0.28",
     "hono": "^4.12.30",
     "jsonwebtoken": "^9.0.3",

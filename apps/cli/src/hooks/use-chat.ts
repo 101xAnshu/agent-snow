@@ -5,7 +5,7 @@ import {
   lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
 import { loadAuth } from "../lib/auth.js";
-import { executeLocalTool } from "../lib/local-tools.js";
+import { executeLocalTool } from "agent";
 import type { ModeType, SupportedChatModelId } from "shared";
 
 type UseChatProps = {
