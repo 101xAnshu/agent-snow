@@ -211,6 +211,31 @@ describe("bash", () => {
       executeLocalTool("bash", { command: 'node -e "process.exit(7)"' }, Mode.BUILD, cwd),
     ).rejects.toThrow("Exit code 7");
   });
+
+  test("closes stdin so readers get EOF instead of hanging", async () => {
+    const out = await executeLocalTool(
+      "bash",
+      {
+        command:
+          'node -e "process.stdin.on(\'data\',()=>{});process.stdin.on(\'end\',()=>process.stdout.write(\'eof-reached\'))"',
+        timeout: 10_000,
+      },
+      Mode.BUILD,
+      cwd,
+    );
+    expect(out).toContain("eof-reached");
+  });
+
+  test("kills the process when the timeout expires", () => {
+    expect(
+      executeLocalTool(
+        "bash",
+        { command: 'node -e "setInterval(()=>{},1000)"', timeout: 2_000 },
+        Mode.BUILD,
+        cwd,
+      ),
+    ).rejects.toThrow("Timed out after 2000ms");
+  });
 });
 
 describe("dispatcher", () => {

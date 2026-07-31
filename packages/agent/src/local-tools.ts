@@ -1,4 +1,5 @@
 import { readFile, writeFile, readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import { toolInputSchemas, Mode } from "shared";
 import type { ModeType } from "shared";
@@ -161,40 +162,84 @@ async function editFileTool(
   return `Edited ${filePath}`;
 }
 
+async function findWindowsBash(): Promise<string | null> {
+  const candidates = [
+    "C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+    "C:\\Program Files (x86)\\Git\\usr\\bin\\bash.exe",
+    "C:\\Program Files\\Git\\bin\\bash.exe",
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  const fromPath = await Bun.which("bash");
+  return fromPath ?? null;
+}
+
+function killProcessTree(pid: number) {
+  if (process.platform === "win32") {
+    try {
+      Bun.spawnSync(["taskkill", "/pid", String(pid), "/t", "/f"], {
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+    } catch {
+      /* Ignore */
+    }
+  } else {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      /* Ignore */
+    }
+  }
+}
+
 async function bashTool(
   cwd: string,
   args: z.infer<typeof toolInputSchemas.bash>,
 ) {
   const isWin = process.platform === "win32";
-  const argv = isWin
-    ? [
+  let argv: string[];
+  if (isWin) {
+    const gitBash = await findWindowsBash();
+    if (gitBash) {
+      argv = [gitBash, "-c", args.command];
+    } else {
+      argv = [
         (await Bun.which("pwsh")) ?? "powershell.exe",
         "-NoProfile",
         "-NonInteractive",
         "-Command",
         `${args.command}; exit $LASTEXITCODE`,
-      ]
-    : ["bash", "-c", args.command];
+      ];
+    }
+  } else {
+    argv = ["bash", "-c", args.command];
+  }
   const proc = Bun.spawn(argv, {
     cwd,
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
   });
+  proc.stdin.end();
   const timeout = args.timeout ?? 30_000;
 
-  const output = await withTimeout(
-    (async () => {
-      const stdout = await new Response(proc.stdout).text();
-      const stderr = await new Response(proc.stderr).text();
-      const exitCode = await proc.exited;
-      if (exitCode === 0) return stdout || "(no output)";
-      throw new Error(`Exit code ${exitCode}:\n${stderr || stdout}`);
-    })(),
-    timeout,
-  );
+  const run = (async () => {
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const exitCode = await proc.exited;
+    if (exitCode === 0) return stdout || "(no output)";
+    throw new Error(`Exit code ${exitCode}:\n${stderr || stdout}`);
+  })();
 
-  return output;
+  try {
+    return await withTimeout(run, timeout);
+  } catch (error) {
+    killProcessTree(proc.pid);
+    run.catch(() => {});
+    throw error;
+  }
 }
 
 // ── Dispatcher ─────────────────────────────────────────────────
