@@ -61,7 +61,8 @@ export async function runEvalTask(
 ): Promise<EvalRunResult> {
   const started = performance.now();
   const sandbox = await buildSandbox(task);
-  const { mode = Mode.BUILD, signal, onEvent } = options;
+  const { mode: defaultMode = Mode.BUILD, signal, onEvent } = options;
+  const mode = task.mode ?? defaultMode;
 
   let status: EvalRunResult["status"] = "error";
   let steps = 0;

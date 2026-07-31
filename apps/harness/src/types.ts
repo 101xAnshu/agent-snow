@@ -13,6 +13,7 @@ export type EvalTask = {
   };
   timeoutSec?: number;
   maxSteps?: number;
+  mode?: ModeType;
 };
 
 export type EvalStatus = "pass" | "fail" | "error";
