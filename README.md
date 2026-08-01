@@ -61,13 +61,14 @@ satisfies the API contract.
 
 ```bash
 # Prerequisites: Bun >= 1.3, PostgreSQL
+# Windows users: install Git Bash (Git for Windows) for full shell support
 
 git clone <url> && cd agent-snow
-bun install
+bun install   # also generates the Prisma client automatically
 cp .env.example .env
 # Set DATABASE_URL, API keys, and Polar.sh credentials
 
-cd packages/db && bun run generate && bun run migrate && cd ../..
+cd packages/db && bun run migrate && cd ../..
 
 bun --filter server dev   # Terminal 1: API server
 bun --filter cli dev      # Terminal 2: TUI
@@ -89,8 +90,19 @@ bun --filter cli dev      # Terminal 2: TUI
 ```
 apps/cli        Terminal UI client
 apps/server     API server
+apps/harness    Eval harness: sandboxed task runner + fixtures (bun --filter harness eval)
+packages/agent  Headless agent core: runAgent loop, local tool execution, system prompt
 packages/db     Prisma schema and database client
 packages/shared Shared types, Zod schemas, model configs
+```
+
+## Development
+
+```bash
+bun run test         # All test suites (agent tools, harness driver, fixture checks)
+bun run check-types  # Type-check all packages
+bun --filter harness eval --list   # List eval fixtures
+bun --filter harness eval          # Run all fixtures (needs a model API key)
 ```
 
 ## Why build this

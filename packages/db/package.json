@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "generate": "prisma generate",
+    "postinstall": "prisma generate",
     "migrate": "prisma migrate dev",
     "check-types": "tsc -p tsconfig.json --noEmit"
   },
