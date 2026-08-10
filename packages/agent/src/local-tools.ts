@@ -1,6 +1,6 @@
-import { readFile, writeFile, readdir, realpath } from "node:fs/promises";
+import { readFile, writeFile, readdir, realpath, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { resolve, sep } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import { toolInputSchemas, Mode } from "shared";
 import type { ModeType } from "shared";
 import { z } from "zod";
@@ -22,8 +22,19 @@ async function resolveInsideCwd(cwd: string, inputPath: string): Promise<string>
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    if (!isInside(canonicalCwd, await realpath(resolve(resolved, "..")))) {
-      throw new Error(`Path traversal detected: ${inputPath}`);
+    let parent = resolve(resolved, "..");
+    while (true) {
+      try {
+        if (!isInside(canonicalCwd, await realpath(parent))) {
+          throw new Error(`Path traversal detected: ${inputPath}`);
+        }
+        break;
+      } catch (parentError) {
+        if ((parentError as NodeJS.ErrnoException).code !== "ENOENT") throw parentError;
+        const next = resolve(parent, "..");
+        if (next === parent) throw new Error(`Path traversal detected: ${inputPath}`);
+        parent = next;
+      }
     }
   }
   return resolved;
@@ -53,12 +64,13 @@ function release(): void {
 
 function withTimeout<T>(promise: Promise<T>, ms?: number): Promise<T> {
   if (!ms) return promise;
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms),
-    ),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 // ── Tool implementations ───────────────────────────────────────
@@ -73,8 +85,8 @@ async function readFileTool(
   if (args.offset !== undefined || args.limit !== undefined) {
     return lines
       .slice(
-        (args.offset ?? 1) - 1,
-        (args.offset ?? 1) - 1 + (args.limit ?? lines.length),
+        Math.max(0, (args.offset ?? 1) - 1),
+        Math.max(0, (args.offset ?? 1) - 1) + (args.limit ?? lines.length),
       )
       .join("\n");
   }
@@ -104,14 +116,19 @@ async function globTool(
   }
   const searchPath = args.path ? await resolveInsideCwd(cwd, args.path) : cwd;
   const results: string[] = [];
+  const maxResults = 500;
   for await (const match of new Bun.Glob(args.pattern).scan({
     cwd: searchPath,
     absolute: true,
   })) {
     await resolveInsideCwd(cwd, match);
     results.push(match);
+    if (results.length >= maxResults) break;
   }
-  return results.join("\n");
+  return results.join("\n") +
+    (results.length >= maxResults
+      ? `\n[truncated: showing first ${maxResults} matches; refine your pattern or narrow the path]`
+      : "");
 }
 
 async function grepTool(
@@ -154,7 +171,10 @@ async function grepTool(
   }
 
   await searchDir(searchPath);
-  return results.join("\n");
+  return results.join("\n") +
+    (count >= 100
+      ? "\n[truncated: showing first 100 matches; refine your pattern or narrow the path]"
+      : "");
 }
 
 async function writeFileTool(
@@ -162,6 +182,7 @@ async function writeFileTool(
   args: z.infer<typeof toolInputSchemas.writeFile>,
 ) {
   const filePath = await resolveInsideCwd(cwd, args.filePath);
+  await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, args.content, "utf-8");
   return `Written ${Buffer.byteLength(args.content, "utf-8")} bytes to ${filePath}`;
 }
@@ -176,12 +197,11 @@ async function editFileTool(
   if (idx === -1) throw new Error(`Could not find oldString in ${filePath}`);
   if (content.indexOf(args.oldString, idx + 1) !== -1)
     throw new Error(`Found multiple occurrences — be more specific`);
-  await writeFile(
-    filePath,
-    content.replace(args.oldString, args.newString),
-    "utf-8",
-  );
-  return `Edited ${filePath}`;
+  const newContent = content.replace(args.oldString, args.newString);
+  await writeFile(filePath, newContent, "utf-8");
+  const line = newContent.slice(0, idx + args.newString.length).split("\n").length;
+  const context = newContent.split("\n").slice(Math.max(0, line - 2), line + 1).join("\n");
+  return `Edited ${filePath} at line ${line}\n${context}`;
 }
 
 async function findWindowsBash(): Promise<string | null> {
@@ -289,6 +309,14 @@ const toolImpl: Record<
 };
 
 const READ_ONLY_TOOLS = ["readFile", "listDirectory", "glob", "grep"];
+const MAX_OUTPUT_BYTES = 50_000;
+
+function truncateOutput(output: string): string {
+  const bytes = Buffer.byteLength(output, "utf8");
+  if (bytes <= MAX_OUTPUT_BYTES) return output;
+  const truncated = new TextDecoder().decode(Buffer.from(output).subarray(0, MAX_OUTPUT_BYTES));
+  return `${truncated}\n[truncated: output was ${bytes} bytes; use narrower tool parameters]`;
+}
 
 export async function executeLocalTool(
   toolName: string,
@@ -310,7 +338,7 @@ export async function executeLocalTool(
   }
   await acquire();
   try {
-    return await impl(cwd, args);
+    return truncateOutput(await impl(cwd, args));
   } finally {
     release();
   }

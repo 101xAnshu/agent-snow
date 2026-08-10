@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { LanguageModelUsage } from "ai";
 import { calculateCredits, estimateCostUsd } from "./billing.js";
+import { toolInputSchemas } from "./schemas.js";
 
 function usage(
   inputTokens: number,
@@ -32,5 +33,13 @@ describe("credit calculation", () => {
 
   test("includes output token cost", () => {
     expect(estimateCostUsd("gpt-4.1", usage(0, 1_000_000))).toBe(8);
+  });
+});
+
+describe("tool schemas", () => {
+  test("rejects a zero read offset", () => {
+    expect(
+      toolInputSchemas.readFile.safeParse({ filePath: "a.txt", offset: 0 }).success,
+    ).toBe(false);
   });
 });

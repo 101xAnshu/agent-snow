@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -81,6 +82,11 @@ describe("cwd parameter", () => {
     await executeLocalTool("writeFile", { filePath: "new.txt", content: "fresh" }, Mode.BUILD, cwd);
     expect(readFileSync(join(cwd, "new.txt"), "utf-8")).toBe("fresh");
   });
+
+  test("creates missing parent directories", async () => {
+    await executeLocalTool("writeFile", { filePath: "created/nested/file.txt", content: "fresh" }, Mode.BUILD, cwd);
+    expect(readFileSync(join(cwd, "created", "nested", "file.txt"), "utf-8")).toBe("fresh");
+  });
 });
 
 describe("readFile", () => {
@@ -97,6 +103,13 @@ describe("readFile", () => {
       cwd,
     );
     expect(out.trim()).toBe("snowflake is here");
+  });
+
+  test("caps oversized output and reports the original size", async () => {
+    writeFileSync(join(cwd, "large.txt"), "x".repeat(60_000));
+    const out = await executeLocalTool("readFile", { filePath: "large.txt" }, Mode.BUILD, cwd);
+    expect(out).toContain("[truncated: output was 60000 bytes");
+    expect(Buffer.byteLength(out)).toBeLessThan(51_000);
   });
 });
 
@@ -130,6 +143,12 @@ describe("grep", () => {
       cwd,
     );
     expect(out).toContain("data.txt");
+  });
+
+  test("reports when matches are truncated", async () => {
+    writeFileSync(join(cwd, "many.txt"), Array.from({ length: 101 }, () => "match").join("\n"));
+    const out = await executeLocalTool("grep", { pattern: "match", path: "." }, Mode.BUILD, cwd);
+    expect(out).toContain("[truncated: showing first 100 matches");
   });
 });
 

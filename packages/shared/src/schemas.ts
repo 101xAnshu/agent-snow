@@ -8,7 +8,7 @@ export type ModeType = z.infer<typeof modeSchema>;
 export const toolInputSchemas = {
   readFile: z.object({
     filePath: z.string().describe("Absolute path to the file to read"),
-    offset: z.number().int().nonnegative().optional().describe("Line number to start from (1-indexed)"),
+    offset: z.number().int().min(1).optional().describe("Line number to start from (1-indexed)"),
     limit: z.number().int().positive().optional().describe("Maximum number of lines to read"),
   }),
   listDirectory: z.object({
