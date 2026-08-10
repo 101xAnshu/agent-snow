@@ -179,6 +179,7 @@ export async function runAgent(
           tc.input,
           mode,
           cwd,
+          { trusted: true },
         );
         emit({
           type: "tool-output",

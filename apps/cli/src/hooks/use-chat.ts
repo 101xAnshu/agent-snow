@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useChat as useAiChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -6,7 +6,9 @@ import {
 } from "ai";
 import { loadAuth } from "../lib/auth.js";
 import { executeLocalTool } from "agent";
+import { Mode, modeSchema } from "shared";
 import type { ModeType, SupportedChatModelId } from "shared";
+import { useDialog } from "../providers/dialog/index.js";
 
 type UseChatProps = {
   sessionId: string;
@@ -14,6 +16,24 @@ type UseChatProps = {
 };
 
 export function useChat({ sessionId, initialMessages }: UseChatProps) {
+  const { confirm } = useDialog();
+  const approvedOperations = useRef(new Set<string>());
+  const requestApproval = async ({
+    toolName,
+    input,
+  }: {
+    toolName: string;
+    input: Record<string, unknown>;
+  }) => {
+    const command = typeof input.command === "string" ? input.command : "";
+    const destructive = /(^|[;&|]\s*)(rm|rmdir|del|remove-item)\b|git\s+(reset|clean)\b/i.test(command);
+    const target = input.filePath ?? input.command ?? JSON.stringify(input);
+    const key = `${toolName}:${String(target)}`;
+    if (!destructive && approvedOperations.current.has(key)) return true;
+    const approved = await confirm(`Approve ${toolName}`, `${toolName}: ${String(target)}`);
+    if (approved && !destructive) approvedOperations.current.add(key);
+    return approved;
+  };
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -33,7 +53,7 @@ export function useChat({ sessionId, initialMessages }: UseChatProps) {
             body: {
               id: sessionId,
               messages,
-              mode: meta?.mode ?? "BUILD",
+              mode: modeSchema.safeParse(meta?.mode).success ? meta?.mode : Mode.PLAN,
               model: meta?.model ?? "claude-opus-4-6",
             },
           };
@@ -49,11 +69,14 @@ export function useChat({ sessionId, initialMessages }: UseChatProps) {
     onToolCall({ toolCall }: { toolCall: any }) {
       const meta = chat.messages.at(-1)?.metadata as
         { mode?: string } | undefined;
-      const mode = meta?.mode ?? "BUILD";
+      const parsedMode = modeSchema.safeParse(meta?.mode);
+      const mode = parsedMode.success ? parsedMode.data : Mode.PLAN;
       void executeLocalTool(
         toolCall.toolName,
         toolCall.input as Record<string, unknown>,
         mode as ModeType,
+        process.cwd(),
+        { onApprovalRequired: requestApproval },
       )
         .then((output) =>
           chat.addToolOutput({

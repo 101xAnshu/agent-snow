@@ -16,6 +16,7 @@ import type { DialogConfig } from "./types.js";
 type DialogContextValue = {
   open: (config: DialogConfig) => void;
   close: () => void;
+  confirm: (title: string, message: string) => Promise<boolean>;
 };
 const DialogContext = createContext<DialogContextValue | null>(null);
 
@@ -41,9 +42,36 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   );
 
   const close = useCallback(() => {
+    dialogRef.current?.onClose?.();
     setCurrentDialog(null);
     pop("dialog");
   }, [pop]);
+
+  const confirm = useCallback(
+    (title: string, message: string) =>
+      new Promise<boolean>((resolve) => {
+        let settled = false;
+        const settle = (value: boolean) => {
+          if (settled) return;
+          settled = true;
+          resolve(value);
+          setCurrentDialog(null);
+          pop("dialog");
+        };
+        open({
+          title,
+          onClose: () => settle(false),
+          children: (
+            <ApprovalPrompt
+              message={message}
+              onApprove={() => settle(true)}
+              onDeny={() => settle(false)}
+            />
+          ),
+        });
+      }),
+    [open, pop],
+  );
 
   const closeRef = useRef(close);
   closeRef.current = close;
@@ -56,7 +84,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     return false;
   });
 
-  const value = useMemo(() => ({ open, close }), [open, close]);
+  const value = useMemo(() => ({ open, close, confirm }), [open, close, confirm]);
 
   return (
     <DialogContext.Provider value={value}>
@@ -95,6 +123,35 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         </box>
       )}
     </DialogContext.Provider>
+  );
+}
+
+function ApprovalPrompt({
+  message,
+  onApprove,
+  onDeny,
+}: {
+  message: string;
+  onApprove: () => void;
+  onDeny: () => void;
+}) {
+  useKeyboard((key: { name: string }) => {
+    if (key.name === "y" || key.name === "return") {
+      onApprove();
+      return true;
+    }
+    if (key.name === "n" || key.name === "escape") {
+      onDeny();
+      return true;
+    }
+    return false;
+  });
+
+  return (
+    <box flexDirection="column">
+      <text>{message}</text>
+      <text>Press y to approve for this session or n to deny</text>
+    </box>
   );
 }
 

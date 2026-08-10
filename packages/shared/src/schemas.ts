@@ -51,7 +51,7 @@ const readTools = {
 const writeExecTools = {
   writeFile: tool({ description: "Write content to a file (creates or overwrites)", inputSchema: toolInputSchemas.writeFile }),
   editFile: tool({ description: "Replace text in an existing file", inputSchema: toolInputSchemas.editFile }),
-  bash: tool({ description: "Execute a shell command", inputSchema: toolInputSchemas.bash }),
+  bash: tool({ description: "Execute an unconfined local shell command with the current user's operating system permissions", inputSchema: toolInputSchemas.bash }),
 } as const satisfies Record<string, Tool>;
 
 export const readOnlyToolContracts = readTools;

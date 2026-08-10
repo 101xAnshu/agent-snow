@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir } from "node:fs/promises";
+import { readFile, writeFile, readdir, realpath } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import { toolInputSchemas, Mode } from "shared";
@@ -7,10 +7,25 @@ import { z } from "zod";
 
 // ── Path safety ────────────────────────────────────────────────
 
-function resolveInsideCwd(cwd: string, inputPath: string): string {
+function isInside(root: string, candidate: string): boolean {
+  return candidate === root || candidate.startsWith(root + sep);
+}
+
+async function resolveInsideCwd(cwd: string, inputPath: string): Promise<string> {
+  const canonicalCwd = await realpath(cwd);
   const resolved = resolve(cwd, inputPath);
-  if (resolved !== cwd && !resolved.startsWith(cwd + sep))
+  if (!isInside(resolve(cwd), resolved))
     throw new Error(`Path traversal detected: ${inputPath}`);
+  try {
+    if (!isInside(canonicalCwd, await realpath(resolved))) {
+      throw new Error(`Path traversal detected: ${inputPath}`);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if (!isInside(canonicalCwd, await realpath(resolve(resolved, "..")))) {
+      throw new Error(`Path traversal detected: ${inputPath}`);
+    }
+  }
   return resolved;
 }
 
@@ -52,7 +67,7 @@ async function readFileTool(
   cwd: string,
   args: z.infer<typeof toolInputSchemas.readFile>,
 ) {
-  const filePath = resolveInsideCwd(cwd, args.filePath);
+  const filePath = await resolveInsideCwd(cwd, args.filePath);
   const content = await readFile(filePath, "utf-8");
   const lines = content.split("\n");
   if (args.offset !== undefined || args.limit !== undefined) {
@@ -70,7 +85,7 @@ async function listDirTool(
   cwd: string,
   args: z.infer<typeof toolInputSchemas.listDirectory>,
 ) {
-  const dirPath = resolveInsideCwd(cwd, args.path);
+  const dirPath = await resolveInsideCwd(cwd, args.path);
   const entries = await readdir(dirPath, { withFileTypes: true });
   return entries
     .map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
@@ -81,12 +96,19 @@ async function globTool(
   cwd: string,
   args: z.infer<typeof toolInputSchemas.glob>,
 ) {
-  const searchPath = args.path ? resolveInsideCwd(cwd, args.path) : cwd;
+  if (
+    resolve(args.pattern) === args.pattern ||
+    args.pattern.split(/[\\/]+/).includes("..")
+  ) {
+    throw new Error(`Path traversal detected: ${args.pattern}`);
+  }
+  const searchPath = args.path ? await resolveInsideCwd(cwd, args.path) : cwd;
   const results: string[] = [];
   for await (const match of new Bun.Glob(args.pattern).scan({
     cwd: searchPath,
     absolute: true,
   })) {
+    await resolveInsideCwd(cwd, match);
     results.push(match);
   }
   return results.join("\n");
@@ -96,7 +118,7 @@ async function grepTool(
   cwd: string,
   args: z.infer<typeof toolInputSchemas.grep>,
 ) {
-  const searchPath = args.path ? resolveInsideCwd(cwd, args.path) : cwd;
+  const searchPath = args.path ? await resolveInsideCwd(cwd, args.path) : cwd;
   const pattern = new RegExp(args.pattern);
   const include = args.include ? new Bun.Glob(args.include) : null;
   const results: string[] = [];
@@ -139,7 +161,7 @@ async function writeFileTool(
   cwd: string,
   args: z.infer<typeof toolInputSchemas.writeFile>,
 ) {
-  const filePath = resolveInsideCwd(cwd, args.filePath);
+  const filePath = await resolveInsideCwd(cwd, args.filePath);
   await writeFile(filePath, args.content, "utf-8");
   return `Written ${Buffer.byteLength(args.content, "utf-8")} bytes to ${filePath}`;
 }
@@ -148,7 +170,7 @@ async function editFileTool(
   cwd: string,
   args: z.infer<typeof toolInputSchemas.editFile>,
 ) {
-  const filePath = resolveInsideCwd(cwd, args.filePath);
+  const filePath = await resolveInsideCwd(cwd, args.filePath);
   const content = await readFile(filePath, "utf-8");
   const idx = content.indexOf(args.oldString);
   if (idx === -1) throw new Error(`Could not find oldString in ${filePath}`);
@@ -273,12 +295,19 @@ export async function executeLocalTool(
   args: unknown,
   mode: ModeType,
   cwd: string = process.cwd(),
+  security: ToolSecurityOptions = { trusted: true },
 ): Promise<string> {
   if (mode === Mode.PLAN && !READ_ONLY_TOOLS.includes(toolName)) {
     throw new Error(`Tool "${toolName}" is not available in PLAN mode`);
   }
   const impl = toolImpl[toolName];
   if (!impl) throw new Error(`Unknown tool: ${toolName}`);
+  if (["writeFile", "editFile", "bash"].includes(toolName)) {
+    const approved = security.trusted === true || (security.onApprovalRequired
+      ? await security.onApprovalRequired({ toolName, input: args as Record<string, unknown> })
+      : false);
+    if (!approved) return `Permission denied for ${toolName}`;
+  }
   await acquire();
   try {
     return await impl(cwd, args);
@@ -286,3 +315,13 @@ export async function executeLocalTool(
     release();
   }
 }
+
+export type ToolApprovalRequest = {
+  toolName: string;
+  input: Record<string, unknown>;
+};
+
+export type ToolSecurityOptions = {
+  trusted?: boolean;
+  onApprovalRequired?: (request: ToolApprovalRequest) => Promise<boolean>;
+};

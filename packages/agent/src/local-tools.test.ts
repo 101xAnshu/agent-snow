@@ -63,6 +63,12 @@ describe("path safety", () => {
     const out = await executeLocalTool("readFile", { filePath: "src/index.ts" }, Mode.BUILD, cwd);
     expect(out).toContain("answer");
   });
+
+  test("rejects glob patterns that leave cwd", () => {
+    expect(
+      executeLocalTool("glob", { pattern: "../*.txt" }, Mode.BUILD, cwd),
+    ).rejects.toThrow("Path traversal detected");
+  });
 });
 
 describe("cwd parameter", () => {
@@ -243,5 +249,17 @@ describe("dispatcher", () => {
     expect(executeLocalTool("nonexistent", {}, Mode.BUILD, cwd)).rejects.toThrow(
       "Unknown tool",
     );
+  });
+
+  test("returns a denied result when approval is rejected", async () => {
+    const output = await executeLocalTool(
+      "writeFile",
+      { filePath: "denied.txt", content: "no" },
+      Mode.BUILD,
+      cwd,
+      { onApprovalRequired: async () => false },
+    );
+    expect(output).toBe("Permission denied for writeFile");
+    expect(existsSync(join(cwd, "denied.txt"))).toBe(false);
   });
 });
