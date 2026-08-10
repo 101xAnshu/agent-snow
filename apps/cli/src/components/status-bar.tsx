@@ -1,10 +1,10 @@
 import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../providers/theme/index.js";
 import { usePromptConfig } from "../providers/prompt-config/index.js";
-import { Mode } from "shared";
+import { findSupportedChatModel, Mode } from "shared";
 
 export function StatusBar() {
-  const { mode, model } = usePromptConfig();
+  const { mode, model, contextTokens } = usePromptConfig();
   const { colors } = useTheme();
 
   return (
@@ -17,6 +17,9 @@ export function StatusBar() {
         ›
       </text>
       <text>{model}</text>
+      <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
+        {contextTokens.toLocaleString()} / {(findSupportedChatModel(model)?.meta.contextWindow ?? 0).toLocaleString()}
+      </text>
     </box>
   );
 }

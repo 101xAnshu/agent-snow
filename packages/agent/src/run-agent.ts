@@ -1,9 +1,8 @@
 import { generateText, isStepCount } from "ai";
 import type { ModelMessage } from "ai";
-import { getToolContracts, Mode, DEFAULT_CHAT_MODEL_ID } from "shared";
+import { Mode, DEFAULT_CHAT_MODEL_ID } from "shared";
 import type { ModeType } from "shared";
-import { resolveModel } from "./models.js";
-import { buildSystemPrompt } from "./system-prompt.js";
+import { createAgentDefinition } from "./definition.js";
 import { executeLocalTool } from "./local-tools.js";
 
 type Usage = Awaited<ReturnType<typeof generateText>>["usage"];
@@ -82,9 +81,11 @@ export async function runAgent(
     onEvent,
   } = options;
 
-  const { model: languageModel, providerOptions } = resolveModel(model);
-  const tools = getToolContracts(mode) as any;
-  const system = buildSystemPrompt(mode);
+  const definition = createAgentDefinition(mode, model);
+  const languageModel = definition.model;
+  const providerOptions = definition.providerOptions;
+  const tools = definition.tools as any;
+  const system = definition.system;
 
   const messages: ModelMessage[] = [{ role: "user", content: prompt }];
   const events: AgentEvent[] = [];

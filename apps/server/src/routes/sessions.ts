@@ -40,7 +40,16 @@ sessionRoutes.get("/:id", async (c) => {
   });
 
   if (!session) return c.json({ error: "Session not found" }, 404);
-  return c.json({ session });
+  const messages = await db.message.findMany({
+    where: { sessionId: id },
+    orderBy: { createdAt: "asc" },
+  });
+  return c.json({
+    session: {
+      ...session,
+      messages: messages.length > 0 ? messages : session.messages,
+    },
+  });
 });
 
 const createSessionSchema = z.object({ title: z.string().min(1).max(200) });

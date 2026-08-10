@@ -15,6 +15,8 @@ type PromptConfigValue = {
   setMode: (m: ModeType) => void;
   setModel: (m: SupportedChatModelId) => void;
   toggleMode: () => void;
+  contextTokens: number;
+  setContextTokens: (tokens: number) => void;
 };
 
 const PromptConfigContext = createContext<PromptConfigValue | null>(null);
@@ -24,13 +26,14 @@ export function PromptConfigProvider({ children }: { children: ReactNode }) {
   const [model, setModel] = useState<SupportedChatModelId>(
     DEFAULT_CHAT_MODEL_ID,
   );
+  const [contextTokens, setContextTokens] = useState(0);
   const toggleMode = useCallback(
     () => setMode((prev) => (prev === Mode.BUILD ? Mode.PLAN : Mode.BUILD)),
     [],
   );
   const value = useMemo(
-    () => ({ mode, model, setMode, setModel, toggleMode }),
-    [mode, model],
+    () => ({ mode, model, setMode, setModel, toggleMode, contextTokens, setContextTokens }),
+    [mode, model, contextTokens],
   );
   return (
     <PromptConfigContext.Provider value={value}>

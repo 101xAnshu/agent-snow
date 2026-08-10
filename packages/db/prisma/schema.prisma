@@ -14,6 +14,19 @@ model Session {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   messages  Json     @default("[]")
+  messageRows Message[]
 
   @@index([userId, updatedAt])
+}
+
+model Message {
+  id        String   @id
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String
+  parts     Json
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, createdAt])
 }

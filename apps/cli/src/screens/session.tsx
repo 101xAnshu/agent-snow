@@ -22,7 +22,7 @@ const locationStateSchema = z.object({
 export function Session() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
-  const { mode, model } = usePromptConfig();
+  const { mode, model, setContextTokens } = usePromptConfig();
   const { isTopLayer } = useKeyboardLayer();
   const [initialLoading, setInitialLoading] = useState(true);
   const [dbMessages, setDbMessages] = useState<Array<
@@ -51,6 +51,11 @@ export function Session() {
 
   const initialMessages = useMemo(() => dbMessages ?? undefined, [dbMessages]);
   const chat = useChat({ sessionId: id ?? "", initialMessages });
+
+  useEffect(() => {
+    const last = chat.messages.at(-1)?.metadata as { contextTokens?: number } | undefined;
+    if (typeof last?.contextTokens === "number") setContextTokens(last.contextTokens);
+  }, [chat.messages, setContextTokens]);
 
   useEffect(() => {
     return () => {
