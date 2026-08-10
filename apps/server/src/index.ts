@@ -7,7 +7,7 @@ import { authRoutes } from "./routes/auth.js";
 import { sessionRoutes } from "./routes/sessions.js";
 import { chatRoutes } from "./routes/chat.js";
 import { requireAuth, type AuthenticatedEnv } from "./middleware/require-auth.js";
-import { billingRoutes } from "./routes/billing.js";
+import { billingPublicRoutes, billingRoutes } from "./routes/billing.js";
 
 const app = new Hono();
 
@@ -21,6 +21,7 @@ app.use("*", async (c, next) => {
 app.route("/health", healthRoutes);
 app.route("/auth", authRoutes);
 app.route("/sessions", sessionRoutes);
+app.route("/billing", billingPublicRoutes);
 
 function protectedRoute(path: string, routes: Hono<AuthenticatedEnv>) {
   const sub = new Hono<AuthenticatedEnv>();

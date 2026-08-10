@@ -23,9 +23,11 @@ billingRoutes.post("/portal", async (c) => {
   }
 });
 
-billingRoutes.get("/success", (c) =>
+const billingPublicRoutes = new Hono();
+
+billingPublicRoutes.get("/success", (c) =>
   c.html(`<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;">
     <div style="text-align:center;"><h1>Payment Successful</h1><p>Your credits have been added. Close this tab.</p><script>window.close()</script></div></body></html>`),
 );
 
-export { billingRoutes };
+export { billingRoutes, billingPublicRoutes };

@@ -30,6 +30,30 @@ export function signSessionToken(userId: string, githubUserId: number): string {
   return jwt.sign({ sub: userId, githubId: githubUserId }, getJwtSecret(), { expiresIn: "24h" });
 }
 
+export type OAuthState = { port: number; nonce: string };
+
+export function signOAuthState(state: OAuthState): string {
+  return jwt.sign(state, getJwtSecret(), { expiresIn: "10m" });
+}
+
+export function verifyOAuthState(state: string): OAuthState | null {
+  try {
+    const payload = jwt.verify(state, getJwtSecret()) as OAuthState;
+    if (
+      typeof payload.port !== "number" ||
+      payload.port <= 0 ||
+      payload.port >= 65536 ||
+      typeof payload.nonce !== "string" ||
+      payload.nonce.length < 16
+    ) {
+      return null;
+    }
+    return { port: payload.port, nonce: payload.nonce };
+  } catch {
+    return null;
+  }
+}
+
 export function verifySessionToken(token: string): { sub: string; githubId: number } | null {
   try {
     return jwt.verify(token, getJwtSecret()) as { sub: string; githubId: number };

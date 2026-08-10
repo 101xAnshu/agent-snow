@@ -1,8 +1,31 @@
 import { Hono } from "hono";
-import { authenticateGitHubToken, signSessionToken } from "../lib/auth.js";
+import {
+  authenticateGitHubToken,
+  signOAuthState,
+  signSessionToken,
+  verifyOAuthState,
+} from "../lib/auth.js";
 import { logger } from "../lib/logger.js";
 
 const authRoutes = new Hono();
+
+authRoutes.get("/login", (c) => {
+  const port = Number(c.req.query("port"));
+  const nonce = c.req.query("nonce");
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  const apiUrl = process.env.API_URL ?? "http://localhost:3000";
+  if (!clientId) return c.text("GITHUB_CLIENT_ID is not set", 500);
+  if (!Number.isInteger(port) || port <= 0 || port >= 65536 || !nonce) {
+    return c.text("Invalid login request", 400);
+  }
+
+  const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
+  authorizeUrl.searchParams.set("client_id", clientId);
+  authorizeUrl.searchParams.set("redirect_uri", `${apiUrl}/auth/callback`);
+  authorizeUrl.searchParams.set("scope", "read:user");
+  authorizeUrl.searchParams.set("state", signOAuthState({ port, nonce }));
+  return c.redirect(authorizeUrl.toString());
+});
 
 authRoutes.get("/callback", async (c) => {
   const code = c.req.query("code");
@@ -10,17 +33,9 @@ authRoutes.get("/callback", async (c) => {
 
   if (!code) return c.text("Missing authorization code", 400);
 
-  let redirectPort = 0;
-  if (state) {
-    try {
-      const parsed = JSON.parse(Buffer.from(state, "base64url").toString()) as { port: number };
-      if (typeof parsed.port === "number" && parsed.port > 0 && parsed.port < 65536) {
-        redirectPort = parsed.port;
-      }
-    } catch {
-      return c.text("Invalid state parameter", 400);
-    }
-  }
+  if (!state) return c.text("Missing state parameter", 400);
+  const oauthState = verifyOAuthState(state);
+  if (!oauthState) return c.text("Invalid state parameter", 400);
 
   try {
     const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
@@ -43,10 +58,12 @@ authRoutes.get("/callback", async (c) => {
     const sessionToken = signSessionToken(userId, user.id);
     logger.info("User authenticated", { userId, login: user.login });
 
-    if (redirectPort) {
-      return c.redirect(`http://localhost:${redirectPort}/callback?token=${sessionToken}`);
-    }
-    return c.json({ token: sessionToken });
+    const callbackUrl = new URL(
+      `http://localhost:${oauthState.port}/callback`,
+    );
+    callbackUrl.searchParams.set("token", sessionToken);
+    callbackUrl.searchParams.set("nonce", oauthState.nonce);
+    return c.redirect(callbackUrl.toString());
   } catch (err) {
     logger.error("Auth callback failed", { error: String(err) });
     return c.text("Authentication failed", 500);

@@ -25,7 +25,7 @@ export async function getAvailableCredits(userId: string): Promise<number> {
     const polar = getPolar();
     const meterId = getRequiredEnv("POLAR_CREDITS_METER_ID");
     const result = await polar.customerMeters.list({
-      customerId: userId,
+      externalCustomerId: userId,
       meterId,
       limit: 1,
     });
@@ -43,7 +43,7 @@ export async function createCheckoutUrl(userId: string): Promise<string> {
   const polar = getPolar();
   const result = await polar.checkouts.create({
     products: [getRequiredEnv("POLAR_CREDIT_PACKAGE_PRICE_ID")],
-    customerId: userId,
+    externalCustomerId: userId,
     successUrl: `${process.env.API_URL}/billing/success`,
   });
   return result.url;
@@ -51,7 +51,9 @@ export async function createCheckoutUrl(userId: string): Promise<string> {
 
 export async function createCustomerPortalUrl(userId: string): Promise<string> {
   const polar = getPolar();
-  const result = await polar.customerSessions.create({ customerId: userId });
+  const result = await polar.customerSessions.create({
+    externalCustomerId: userId,
+  });
   return result.customerPortalUrl;
 }
 
@@ -67,7 +69,7 @@ export async function ingestAiUsage(
       events: [
         {
           name: "ai_credits_used",
-          customerId: userId,
+          externalCustomerId: userId,
           metadata: { credits: String(credits), ...metadata },
         },
       ],

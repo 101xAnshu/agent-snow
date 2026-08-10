@@ -8,10 +8,9 @@ import {
   isStepCount,
 } from "ai";
 import { getDb } from "db";
-import { getToolContracts, modeSchema } from "shared";
+import { calculateCredits, getToolContracts, modeSchema } from "shared";
 import type { ModeType } from "shared";
 import { resolveModel, buildSystemPrompt } from "agent";
-import { calculateCredits } from "../lib/credits.js";
 import type { AuthenticatedEnv } from "../middleware/require-auth.js";
 import { logger } from "../lib/logger.js";
 import { requireCreditsBalance } from "../middleware/require-credits-balance.js";
@@ -24,8 +23,9 @@ const chatRequestSchema = z.object({
   messages: z.array(
     z.object({
       id: z.string(),
-      role: z.enum(["user", "assistant"]),
-      content: z.string(),
+      role: z.enum(["system", "user", "assistant"]),
+      parts: z.array(z.record(z.string(), z.unknown())),
+      metadata: z.record(z.string(), z.unknown()).optional(),
     }),
   ),
   mode: modeSchema,

@@ -21,6 +21,12 @@ export {
   getToolContracts,
 } from "./schemas.js";
 
+export {
+  estimateCostUsd,
+  convertUsdToCredits,
+  calculateCredits,
+} from "./billing.js";
+
 export type {
   ModeType,
   ToolName,
