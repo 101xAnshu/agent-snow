@@ -19,6 +19,7 @@ coverage
 # Build Outputs
 dist/
 build/
+packages/db/generated/
 *.tsbuildinfo
 
 # Debug

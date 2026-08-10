@@ -7,13 +7,13 @@ built with React.
 
 AgentSnow splits across two processes:
 
-**CLI** -- An OpenTUI + React terminal app. Manages the chat interface, session
-state, and local tool execution (read/write files, shell, grep, glob). Tools run
-on the client, not the server -- the server only streams model responses.
+**CLI** -- An OpenTUI + React terminal app. Manages the chat interface,
+approvals, session controls, and local tool execution. Tools run on the client,
+not the server.
 
-**Server** -- A Hono HTTP server. Routes chat requests to Anthropic, OpenAI, or
-Gemini, gates calls behind credit checks (Polar.sh), and persists sessions to
-PostgreSQL via Prisma.
+**Server** -- A Hono HTTP server. Handles GitHub OAuth, routes model requests,
+checks and records Polar credits, compacts long conversations, and persists
+sessions to PostgreSQL through Prisma.
 
 A shared types package keeps tool schemas (Zod) and model metadata synchronized
 between both layers.
@@ -34,12 +34,13 @@ between both layers.
 
 - **Multi-model**: Claude Opus/Sonnet/Haiku, GPT-4.1, Gemini 2.5 -- choose per session
 - **PLAN / BUILD modes**: PLAN restricts to read-only tools; BUILD enables file and shell access
-- **Client-executed tools**: The model requests a tool, the CLI runs it locally, results stream back -- all latency-sensitive work stays off the server
-- **Session persistence**: Conversations saved to PostgreSQL, browsable via /sessions
+- **Client-executed tools**: The model requests a tool, the CLI asks for approval when needed and runs it locally
+- **Session persistence**: Conversations are stored as ordered PostgreSQL message rows and browsable through `/sessions`
 - **@-mention file picker**: Recursive directory autocomplete bound to the `@` key
 - **4 themes**: Nightfox, Catppuccin, Dracula, Tokyo Night
-- **GitHub OAuth**: PKCE flow with a local callback server -- no third-party token forwarding
-- **Credit metering**: Polar.sh checkout and usage ingestion
+- **GitHub OAuth**: Server-authoritative OAuth with signed state and a temporary local CLI callback
+- **Credit metering**: Polar checkout, balance checks, cache-aware model pricing, and usage ingestion
+- **Context management**: Context usage is visible in the TUI and older turns are compacted near model limits
 
 ## Architecture
 
@@ -50,12 +51,16 @@ flowchart LR
     CLI --> Tools[Local Tools]
     Server --> Models[Claude / GPT / Gemini]
     Server --> DB[(PostgreSQL)]
+    Server --> Polar[Polar]
+    CLI --> Agent[Shared Agent Definition]
+    Server --> Agent
+    Harness[Eval Harness] --> Agent
 ```
 
-The CLI and server are independent processes. The CLI embeds no model logic --
-it is a rendering and tool-execution layer. The server handles routing, auth,
-and billing. The server can be self-hosted or replaced with any backend that
-satisfies the API contract.
+The CLI and server are independent local processes. The shared agent package
+keeps prompts, model configuration, tools, context handling, and the headless
+evaluation runner aligned. The server retains model keys, authentication,
+billing, and persistence responsibilities.
 
 ## Quick start
 
@@ -66,7 +71,9 @@ satisfies the API contract.
 git clone <url> && cd agent-snow
 bun install   # also generates the Prisma client automatically
 cp .env.example .env
-# Set DATABASE_URL, API keys, and Polar.sh credentials
+# Set DATABASE_URL, JWT_SECRET, GitHub OAuth credentials, model API keys,
+# and Polar credentials. Register http://localhost:3000/auth/callback as the
+# GitHub OAuth callback URL.
 
 cd packages/db && bun run migrate && cd ../..
 
@@ -78,12 +85,16 @@ bun --filter cli dev      # Terminal 2: TUI
 
 | Command | Description |
 |---------|-------------|
-| /agents | Toggle BUILD / PLAN mode |
+| /new | Start a new conversation |
+| /agents | Select BUILD or PLAN mode |
 | /models | Select an AI model |
 | /sessions | Browse past sessions |
 | /theme | Change color theme |
 | /login | Sign in with GitHub |
+| /logout | Clear the current login |
 | /upgrade | Purchase credits |
+| /usage | Open the Polar billing portal |
+| /exit | Quit AgentSnow |
 
 ## Repository structure
 
@@ -95,6 +106,22 @@ packages/agent  Headless agent core: runAgent loop, local tool execution, system
 packages/db     Prisma schema and database client
 packages/shared Shared types, Zod schemas, model configs
 ```
+
+## Security
+
+PLAN mode exposes only read-only tools and fails closed when mode metadata is
+missing or invalid. File tools resolve canonical paths and reject access outside
+the selected working directory, including traversal through symlinks.
+
+BUILD mode can write files and execute commands after interactive approval.
+Approved non-destructive operations are remembered for the current session;
+destructive commands prompt every time. Shell commands are not sandboxed or
+containerized. They run locally with the same operating-system permissions as
+the CLI and can access paths outside the working directory.
+
+The CLI stores only a short-lived server JWT in `~/.snow/auth.json` and attempts
+to restrict that file to the current user. It does not store the GitHub access
+token.
 
 ## Development
 

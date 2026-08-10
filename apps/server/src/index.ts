@@ -11,7 +11,15 @@ import { billingPublicRoutes, billingRoutes } from "./routes/billing.js";
 
 const app = new Hono();
 
-app.use("*", cors());
+app.use(
+  "*",
+  cors({
+    origin: (origin) =>
+      /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+        ? origin
+        : "",
+  }),
+);
 app.use("*", async (c, next) => {
   const start = Date.now();
   await next();

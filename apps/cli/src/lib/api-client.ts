@@ -69,11 +69,11 @@ export const api = {
   getCheckoutUrl: async () => {
     const res = await fetchWithRetry("/billing/checkout");
     if (!res.ok) throw new Error(await getErrorMessage(res));
-    return res.json() as Promise<{ checkoutUrl: string }>;
+    return res.json() as Promise<{ url: string }>;
   },
   getBillingPortalUrl: async () => {
     const res = await fetchWithRetry("/billing/portal");
     if (!res.ok) throw new Error(await getErrorMessage(res));
-    return res.json() as Promise<{ portalUrl: string }>;
+    return res.json() as Promise<{ url: string }>;
   },
 };

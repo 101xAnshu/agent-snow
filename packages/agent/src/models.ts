@@ -20,12 +20,7 @@ export function resolveModel(modelId: string): { model: LanguageModel; providerO
           : undefined,
       };
     case "gpt":
-      return {
-        model: openai(modelId),
-        providerOptions: modelId === "gpt-4.1"
-          ? { openai: { thinking: { type: "enabled", reasoningSummary: "detailed" } } }
-          : undefined,
-      };
+      return { model: openai(modelId) };
     case "gemini":
       return { model: google(modelId) };
     default:

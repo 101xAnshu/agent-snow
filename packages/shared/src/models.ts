@@ -24,13 +24,13 @@ export const SUPPORTED_CHAT_MODELS = [
     id: "claude-opus-4-6",
     provider: "anthropic",
     pricing: { inputUsdPerMillionTokens: 15, outputUsdPerMillionTokens: 75 },
-    meta: { displayName: "Claude Opus 4", contextWindow: 200_000 },
+    meta: { displayName: "Claude Opus 4.6", contextWindow: 200_000 },
   },
   {
     id: "claude-sonnet-4-6",
     provider: "anthropic",
     pricing: { inputUsdPerMillionTokens: 3, outputUsdPerMillionTokens: 15 },
-    meta: { displayName: "Claude Sonnet 4", contextWindow: 200_000 },
+    meta: { displayName: "Claude Sonnet 4.6", contextWindow: 200_000 },
   },
   {
     id: "claude-haiku-4-5",
