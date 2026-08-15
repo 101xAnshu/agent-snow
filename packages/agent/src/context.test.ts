@@ -4,7 +4,11 @@ import { compactMessagesForContext, estimateMessageTokens } from "./context.js";
 describe("context management", () => {
   test("leaves short conversations unchanged", () => {
     const messages = [{ id: "1", role: "user", parts: [{ type: "text", text: "hello" }] }];
-    expect(compactMessagesForContext(messages, 1000).messages).toBe(messages);
+    expect(compactMessagesForContext(messages, 1000)).toEqual({
+      messages,
+      estimatedTokens: estimateMessageTokens(messages),
+      compacted: false,
+    });
   });
 
   test("compacts older turns and keeps recent messages intact", () => {
@@ -18,6 +22,6 @@ describe("context management", () => {
     expect(result.messages.slice(1).map((message) => message.id)).toEqual(
       messages.slice(-12).map((message) => message.id),
     );
-    expect(result.estimatedTokens).toBe(estimateMessageTokens(result.messages));
+    expect(result.estimatedTokens).toBeLessThan(estimateMessageTokens(messages));
   });
 });

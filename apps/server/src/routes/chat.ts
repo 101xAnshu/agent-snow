@@ -19,7 +19,7 @@ import { ingestAiUsage } from "../lib/polar.js";
 
 const chatRoutes = new Hono<AuthenticatedEnv>();
 
-const chatRequestSchema = z.object({
+export const chatRequestSchema = z.object({
   id: z.string(),
   messages: z.array(
     z.object({

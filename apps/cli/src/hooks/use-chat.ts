@@ -6,9 +6,9 @@ import {
 } from "ai";
 import { loadAuth } from "../lib/auth.js";
 import { executeLocalTool } from "agent";
-import { Mode, modeSchema } from "shared";
 import type { ModeType, SupportedChatModelId } from "shared";
 import { useDialog } from "../providers/dialog/index.js";
+import { resolveApproval, resolveModeFromMetadata } from "../lib/approval.js";
 
 type UseChatProps = {
   sessionId: string;
@@ -25,14 +25,12 @@ export function useChat({ sessionId, initialMessages }: UseChatProps) {
     toolName: string;
     input: Record<string, unknown>;
   }) => {
-    const command = typeof input.command === "string" ? input.command : "";
-    const destructive = /(^|[;&|]\s*)(rm|rmdir|del|remove-item)\b|git\s+(reset|clean)\b/i.test(command);
-    const target = input.filePath ?? input.command ?? JSON.stringify(input);
-    const key = `${toolName}:${String(target)}`;
-    if (!destructive && approvedOperations.current.has(key)) return true;
-    const approved = await confirm(`Approve ${toolName}`, `${toolName}: ${String(target)}`);
-    if (approved && !destructive) approvedOperations.current.add(key);
-    return approved;
+    return resolveApproval({
+      toolName,
+      input,
+      approvedOperations: approvedOperations.current,
+      confirm,
+    });
   };
   const transport = useMemo(
     () =>
@@ -53,7 +51,7 @@ export function useChat({ sessionId, initialMessages }: UseChatProps) {
             body: {
               id: sessionId,
               messages,
-              mode: modeSchema.safeParse(meta?.mode).success ? meta?.mode : Mode.PLAN,
+              mode: resolveModeFromMetadata(meta?.mode),
               model: meta?.model ?? "claude-opus-4-6",
             },
           };
@@ -69,8 +67,7 @@ export function useChat({ sessionId, initialMessages }: UseChatProps) {
     onToolCall({ toolCall }: { toolCall: any }) {
       const meta = chat.messages.at(-1)?.metadata as
         { mode?: string } | undefined;
-      const parsedMode = modeSchema.safeParse(meta?.mode);
-      const mode = parsedMode.success ? parsedMode.data : Mode.PLAN;
+      const mode = resolveModeFromMetadata(meta?.mode);
       void executeLocalTool(
         toolCall.toolName,
         toolCall.input as Record<string, unknown>,
