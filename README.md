@@ -132,6 +132,17 @@ bun --filter harness eval --list   # List eval fixtures
 bun --filter harness eval          # Run all fixtures (needs a model API key)
 ```
 
+## Headless mode
+
+Automation can run the real agent without starting the TUI:
+
+```bash
+bun --filter cli headless -p "Inspect the project" --output json --agent-mode PLAN --cwd .
+```
+
+The command emits versioned JSON lines to stdout. Diagnostics go to stderr.
+The exported `runHeadless` function provides the same protocol to Bun scripts.
+
 ## Why build this
 
 Existing AI coding tools couple the agent to a specific model provider, a

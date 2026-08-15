@@ -7,6 +7,7 @@
     "dev": "bun run --watch src/index.tsx",
     "build": "bun build --target bun ./src/index.tsx --outdir ./dist --external @opentui/core-darwin-x64 --external @opentui/core-darwin-arm64 --external @opentui/core-linux-x64 --external @opentui/core-linux-arm64 --external @opentui/core-linux-x64-musl --external @opentui/core-linux-arm64-musl --external @opentui/core-win32-arm64",
     "test": "bun test",
+    "headless": "bun ./bin/snow",
     "check-types": "tsc -p tsconfig.json --noEmit"
   },
   "bin": {

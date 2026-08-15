@@ -3,4 +3,19 @@ import dotenv from "dotenv";
 import path from "path";
 
 dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
-await import("../src/index.tsx");
+
+const args = process.argv.slice(2);
+const promptIndex = args.indexOf("-p");
+if (promptIndex !== -1) {
+  const { parseHeadlessArgs, runHeadless } = await import("../src/headless.ts");
+  try {
+    const options = parseHeadlessArgs(args);
+    if (!options) throw new Error("Missing headless options");
+    await runHeadless(options);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  }
+} else {
+  await import("../src/index.tsx");
+}
