@@ -1,14 +1,15 @@
-import { generateText, isStepCount } from "ai";
-import type { ModelMessage } from "ai";
+import { streamText, isStepCount } from "ai";
+import type { LanguageModel, LanguageModelUsage, ModelMessage } from "ai";
 import { Mode, DEFAULT_CHAT_MODEL_ID } from "shared";
 import type { ModeType } from "shared";
 import { createAgentDefinition } from "./definition.js";
 import { executeLocalTool } from "./local-tools.js";
 
-type Usage = Awaited<ReturnType<typeof generateText>>["usage"];
+type Usage = LanguageModelUsage;
 
 export type AgentEvent =
   | { type: "step-start"; step: number }
+  | { type: "text-delta"; step: number; delta: string }
   | { type: "text"; text: string }
   | {
       type: "tool-call";
@@ -18,16 +19,23 @@ export type AgentEvent =
     }
   | { type: "tool-output"; step: number; toolName: string; output: string }
   | { type: "tool-error"; step: number; toolName: string; error: string }
+  | { type: "step-finish"; step: number; reason: string; usage: Usage }
   | { type: "finish"; reason: string; usage: Usage };
 
 export type RunAgentOptions = {
   prompt: string;
+  messages?: ModelMessage[];
   mode?: ModeType;
   model?: string;
   cwd?: string;
   maxSteps?: number;
   abortSignal?: AbortSignal;
   onEvent?: (event: AgentEvent) => void;
+  languageModel?: LanguageModel;
+  onApprovalRequired?: (request: {
+    toolName: string;
+    input: Record<string, unknown>;
+  }) => Promise<boolean>;
 };
 
 export type AgentResult = {
@@ -79,15 +87,18 @@ export async function runAgent(
     maxSteps = 10,
     abortSignal,
     onEvent,
+    languageModel: injectedLanguageModel,
+    onApprovalRequired,
   } = options;
 
   const definition = createAgentDefinition(mode, model);
-  const languageModel = definition.model;
+  const languageModel = injectedLanguageModel ?? definition.model;
   const providerOptions = definition.providerOptions;
   const tools = definition.tools as any;
   const system = definition.system;
 
-  const messages: ModelMessage[] = [{ role: "user", content: prompt }];
+  const messages: ModelMessage[] = [...(options.messages ?? [])];
+  if (prompt) messages.push({ role: "user", content: prompt });
   const events: AgentEvent[] = [];
   const emit = (event: AgentEvent) => {
     events.push(event);
@@ -108,7 +119,7 @@ export async function runAgent(
     steps++;
     emit({ type: "step-start", step: steps });
 
-    const result = await generateText({
+    const result = streamText({
       model: languageModel,
       system,
       messages,
@@ -118,7 +129,14 @@ export async function runAgent(
       abortSignal,
     });
 
-    const stepUsage = result.usage;
+    let stepText = "";
+    for await (const delta of result.textStream) {
+      stepText += delta;
+      text += delta;
+      emit({ type: "text-delta", step: steps, delta });
+    }
+
+    const stepUsage = await result.usage;
     usage = {
       inputTokens: (usage.inputTokens ?? 0) + (stepUsage?.inputTokens ?? 0),
       outputTokens: (usage.outputTokens ?? 0) + (stepUsage?.outputTokens ?? 0),
@@ -144,19 +162,27 @@ export async function runAgent(
       },
     };
 
-    if (result.text) {
-      text = result.text;
-      emit({ type: "text", text: result.text });
+    if (stepText) {
+      emit({ type: "text", text: stepText });
     }
 
-    if (result.toolCalls.length === 0) {
-      finishReason = result.finishReason;
+    const toolCalls = await result.toolCalls;
+    const stepFinishReason = await result.finishReason;
+    emit({
+      type: "step-finish",
+      step: steps,
+      reason: stepFinishReason,
+      usage: stepUsage,
+    });
+
+    if (toolCalls.length === 0) {
+      finishReason = stepFinishReason;
       break;
     }
 
     const assistantParts: Array<TextPart | ToolCallPart> = [
-      ...(result.text ? [{ type: "text" as const, text: result.text }] : []),
-      ...result.toolCalls.map((tc) => ({
+      ...(stepText ? [{ type: "text" as const, text: stepText }] : []),
+      ...toolCalls.map((tc) => ({
         type: "tool-call" as const,
         toolCallId: tc.toolCallId,
         toolName: tc.toolName,
@@ -166,7 +192,7 @@ export async function runAgent(
     messages.push({ role: "assistant", content: assistantParts });
 
     const toolResultParts: ToolResultPart[] = [];
-    for (const tc of result.toolCalls) {
+    for (const tc of toolCalls) {
       const input = (tc.input ?? {}) as Record<string, unknown>;
       emit({
         type: "tool-call",
@@ -180,7 +206,9 @@ export async function runAgent(
           tc.input,
           mode,
           cwd,
-          { trusted: true },
+          onApprovalRequired
+            ? { onApprovalRequired }
+            : { trusted: true },
         );
         emit({
           type: "tool-output",
