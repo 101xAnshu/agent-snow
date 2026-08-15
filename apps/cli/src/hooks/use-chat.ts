@@ -18,6 +18,7 @@ type UseChatProps = {
 export function useChat({ sessionId, initialMessages }: UseChatProps) {
   const { confirm } = useDialog();
   const approvedOperations = useRef(new Set<string>());
+  const sequentialToolChain = useRef(Promise.resolve());
   const requestApproval = async ({
     toolName,
     input,
@@ -70,13 +71,26 @@ export function useChat({ sessionId, initialMessages }: UseChatProps) {
       const meta = chat.messages.at(-1)?.metadata as
         { mode?: string } | undefined;
       const mode = resolveModeFromMetadata(meta?.mode);
-      void executeLocalTool(
+      const execute = () =>
+        executeLocalTool(
+          toolCall.toolName,
+          toolCall.input as Record<string, unknown>,
+          mode as ModeType,
+          process.cwd(),
+          { onApprovalRequired: requestApproval },
+        );
+      const isSequential = ["writeFile", "editFile", "bash"].includes(
         toolCall.toolName,
-        toolCall.input as Record<string, unknown>,
-        mode as ModeType,
-        process.cwd(),
-        { onApprovalRequired: requestApproval },
-      )
+      );
+      const operation = isSequential
+        ? sequentialToolChain.current.then(execute, execute)
+        : execute();
+      if (isSequential)
+        sequentialToolChain.current = operation.then(
+          () => undefined,
+          () => undefined,
+        );
+      void operation
         .then((output) =>
           chat.addToolOutput({
             tool: toolCall.toolName as never,

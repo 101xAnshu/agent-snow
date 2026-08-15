@@ -17,7 +17,14 @@ export type AgentEvent =
       toolName: string;
       input: Record<string, unknown>;
     }
-  | { type: "tool-output"; step: number; toolName: string; output: string }
+  | {
+      type: "tool-output";
+      step: number;
+      toolName: string;
+      output: string;
+      metadata?: Record<string, unknown>;
+    }
+  | { type: "tool-update"; step: number; toolName: string; update: string }
   | { type: "tool-error"; step: number; toolName: string; error: string }
   | { type: "step-finish"; step: number; reason: string; usage: Usage }
   | { type: "finish"; reason: string; usage: Usage };
@@ -37,7 +44,34 @@ export type RunAgentOptions = {
     toolName: string;
     input: Record<string, unknown>;
   }) => Promise<boolean>;
+  steeringQueue?: AgentInputQueue;
+  followUpQueue?: AgentInputQueue;
+  afterToolCall?: (result: {
+    toolName: string;
+    input: Record<string, unknown>;
+    output: string;
+    error?: string;
+  }) =>
+    Promise<Record<string, unknown> | void> | Record<string, unknown> | void;
+  sequentialTools?: string[];
 };
+
+export type AgentInputQueue = {
+  push(input: string): void;
+  take(): string[];
+};
+
+export function createAgentInputQueue(): AgentInputQueue {
+  const inputs: string[] = [];
+  return {
+    push(input) {
+      if (input.trim()) inputs.push(input.trim());
+    },
+    take() {
+      return inputs.splice(0, inputs.length);
+    },
+  };
+}
 
 export type AgentResult = {
   text: string;
@@ -88,6 +122,10 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     onEvent,
     languageModel: injectedLanguageModel,
     onApprovalRequired,
+    steeringQueue,
+    followUpQueue,
+    afterToolCall,
+    sequentialTools = ["writeFile", "editFile", "bash"],
   } = options;
 
   const definition = createAgentDefinition(mode, model, thinkingLevel);
@@ -176,6 +214,11 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
 
     if (toolCalls.length === 0) {
       finishReason = stepFinishReason;
+      const followUps = followUpQueue?.take() ?? [];
+      if (followUps.length > 0 && steps < maxSteps) {
+        messages.push({ role: "user", content: followUps.join("\n\n") });
+        continue;
+      }
       break;
     }
 
@@ -190,9 +233,14 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     ];
     messages.push({ role: "assistant", content: assistantParts });
 
-    const toolResultParts: ToolResultPart[] = [];
-    for (const tc of toolCalls) {
+    const executeTool = async (tc: (typeof toolCalls)[number]) => {
       const input = (tc.input ?? {}) as Record<string, unknown>;
+      emit({
+        type: "tool-update",
+        step: steps,
+        toolName: tc.toolName,
+        update: "started",
+      });
       emit({
         type: "tool-call",
         step: steps,
@@ -207,18 +255,35 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           cwd,
           onApprovalRequired ? { onApprovalRequired } : { trusted: true },
         );
+        const metadata = await afterToolCall?.({
+          toolName: tc.toolName,
+          input,
+          output,
+        });
+        emit({
+          type: "tool-update",
+          step: steps,
+          toolName: tc.toolName,
+          update: "completed",
+        });
         emit({
           type: "tool-output",
           step: steps,
           toolName: tc.toolName,
           output,
+          ...(metadata ? { metadata } : {}),
         });
-        toolResultParts.push({
+        return {
           type: "tool-result",
           toolCallId: tc.toolCallId,
           toolName: tc.toolName,
-          output: { type: "text", value: output },
-        });
+          output: {
+            type: "text",
+            value: metadata
+              ? `${output}\n\nTool metadata: ${JSON.stringify(metadata)}`
+              : output,
+          },
+        } satisfies ToolResultPart;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         emit({
@@ -227,15 +292,54 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           toolName: tc.toolName,
           error: message,
         });
-        toolResultParts.push({
+        const metadata = await afterToolCall?.({
+          toolName: tc.toolName,
+          input,
+          output: message,
+          error: message,
+        });
+        emit({
+          type: "tool-update",
+          step: steps,
+          toolName: tc.toolName,
+          update: "failed",
+        });
+        return {
           type: "tool-result",
           toolCallId: tc.toolCallId,
           toolName: tc.toolName,
-          output: { type: "error-text", value: message },
-        });
+          output: {
+            type: "error-text",
+            value: metadata
+              ? `${message}\n\nTool metadata: ${JSON.stringify(metadata)}`
+              : message,
+          },
+        } satisfies ToolResultPart;
       }
+    };
+    const results = new Map<string, ToolResultPart>();
+    const parallel = toolCalls.filter(
+      (tc) => !sequentialTools.includes(tc.toolName),
+    );
+    const sequential = toolCalls.filter((tc) =>
+      sequentialTools.includes(tc.toolName),
+    );
+    const parallelResults = await Promise.all(parallel.map(executeTool));
+    for (const result of parallelResults)
+      results.set(result.toolCallId, result);
+    for (const tc of sequential) {
+      const result = await executeTool(tc);
+      results.set(result.toolCallId, result);
     }
+    const toolResultParts = toolCalls.flatMap((tc) => {
+      const result = results.get(tc.toolCallId);
+      return result ? [result] : [];
+    });
     messages.push({ role: "tool", content: toolResultParts });
+
+    const steering = steeringQueue?.take() ?? [];
+    if (steering.length > 0)
+      messages.push({ role: "user", content: steering.join("\n\n") });
   }
 
   emit({ type: "finish", reason: finishReason, usage });
