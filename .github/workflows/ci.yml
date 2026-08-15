@@ -7,6 +7,8 @@ on:
 
 jobs:
   verify:
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/agent_snow_ci
     strategy:
       fail-fast: false
       matrix:
