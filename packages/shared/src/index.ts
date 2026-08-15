@@ -3,6 +3,9 @@ export {
   DEFAULT_CHAT_MODEL_ID,
   findSupportedChatModel,
   isSupportedChatModel,
+  getModelCatalogPath,
+  parseModelCatalog,
+  modelCatalogSchema,
 } from "./models.js";
 
 export type {
@@ -10,6 +13,7 @@ export type {
   SupportedProvider,
   SupportedChatModel,
   SupportedChatModelId,
+  ThinkingLevel,
 } from "./models.js";
 
 export {

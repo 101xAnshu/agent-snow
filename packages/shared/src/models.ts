@@ -1,3 +1,9 @@
+import rawModels from "./models.json";
+import { z } from "zod";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 export type ModelPricing = {
   inputUsdPerMillionTokens: number;
   outputUsdPerMillionTokens: number;
@@ -5,79 +11,59 @@ export type ModelPricing = {
   cacheReadUsdPerMillionTokens?: number;
 };
 
-export type SupportedProvider = "anthropic" | "openai" | "google";
+export type SupportedProvider =
+  "anthropic" | "openai" | "google" | "openrouter" | "ollama";
+export type ThinkingLevel = "off" | "low" | "medium" | "high";
 
-type ChatModelMeta = {
-  displayName: string;
-  contextWindow: number;
-};
+export const modelCatalogSchema = z.array(
+  z.object({
+    id: z.string().min(1),
+    provider: z.enum(["anthropic", "openai", "google", "openrouter", "ollama"]),
+    providerModelId: z.string().min(1).optional(),
+    pricing: z.object({
+      inputUsdPerMillionTokens: z.number().nonnegative(),
+      outputUsdPerMillionTokens: z.number().nonnegative(),
+      cacheWriteUsdPerMillionTokens: z.number().nonnegative().optional(),
+      cacheReadUsdPerMillionTokens: z.number().nonnegative().optional(),
+    }),
+    meta: z.object({
+      displayName: z.string(),
+      contextWindow: z.number().int().positive(),
+    }),
+  }),
+);
 
-type ChatModelDefinition = {
-  id: string;
-  provider: SupportedProvider;
-  pricing: ModelPricing;
-  meta: ChatModelMeta;
-};
+export function getModelCatalogPath(): string {
+  return (
+    process.env.SNOW_MODELS_PATH ?? join(homedir(), ".snow", "models.json")
+  );
+}
 
-export const SUPPORTED_CHAT_MODELS = [
-  {
-    id: "claude-opus-4-6",
-    provider: "anthropic",
-    pricing: { inputUsdPerMillionTokens: 15, outputUsdPerMillionTokens: 75 },
-    meta: { displayName: "Claude Opus 4.6", contextWindow: 200_000 },
-  },
-  {
-    id: "claude-sonnet-4-6",
-    provider: "anthropic",
-    pricing: { inputUsdPerMillionTokens: 3, outputUsdPerMillionTokens: 15 },
-    meta: { displayName: "Claude Sonnet 4.6", contextWindow: 200_000 },
-  },
-  {
-    id: "claude-haiku-4-5",
-    provider: "anthropic",
-    pricing: { inputUsdPerMillionTokens: 0.8, outputUsdPerMillionTokens: 4 },
-    meta: { displayName: "Claude Haiku 4.5", contextWindow: 200_000 },
-  },
-  {
-    id: "gpt-4.1",
-    provider: "openai",
-    pricing: { inputUsdPerMillionTokens: 2, outputUsdPerMillionTokens: 8 },
-    meta: { displayName: "GPT-4.1", contextWindow: 1_000_000 },
-  },
-  {
-    id: "gpt-4.1-mini",
-    provider: "openai",
-    pricing: { inputUsdPerMillionTokens: 0.4, outputUsdPerMillionTokens: 1.6 },
-    meta: { displayName: "GPT-4.1 Mini", contextWindow: 1_000_000 },
-  },
-  {
-    id: "gpt-4.1-nano",
-    provider: "openai",
-    pricing: { inputUsdPerMillionTokens: 0.1, outputUsdPerMillionTokens: 0.4 },
-    meta: { displayName: "GPT-4.1 Nano", contextWindow: 1_000_000 },
-  },
-  {
-    id: "gemini-2.5-flash",
-    provider: "google",
-    pricing: { inputUsdPerMillionTokens: 0.15, outputUsdPerMillionTokens: 0.6 },
-    meta: { displayName: "Gemini 2.5 Flash", contextWindow: 1_000_000 },
-  },
-  {
-    id: "gemini-2.5-pro",
-    provider: "google",
-    pricing: { inputUsdPerMillionTokens: 1.25, outputUsdPerMillionTokens: 10 },
-    meta: { displayName: "Gemini 2.5 Pro", contextWindow: 1_000_000 },
-  },
-] as const satisfies readonly ChatModelDefinition[];
+export function parseModelCatalog(value: unknown) {
+  return modelCatalogSchema.parse(value);
+}
 
+function loadModelCatalog() {
+  const builtIn = parseModelCatalog(rawModels);
+  const path = getModelCatalogPath();
+  if (!existsSync(path)) return builtIn;
+  const external = parseModelCatalog(JSON.parse(readFileSync(path, "utf8")));
+  const models = new Map(builtIn.map((model) => [model.id, model]));
+  for (const model of external) models.set(model.id, model);
+  return [...models.values()];
+}
+
+export const SUPPORTED_CHAT_MODELS = loadModelCatalog();
 export type SupportedChatModel = (typeof SUPPORTED_CHAT_MODELS)[number];
-export type SupportedChatModelId = SupportedChatModel["id"];
+export type SupportedChatModelId = string;
 export const DEFAULT_CHAT_MODEL_ID: SupportedChatModelId = "claude-opus-4-6";
 
-export function findSupportedChatModel(id: string): SupportedChatModel | undefined {
-  return SUPPORTED_CHAT_MODELS.find((m) => m.id === id);
+export function findSupportedChatModel(
+  id: string,
+): SupportedChatModel | undefined {
+  return SUPPORTED_CHAT_MODELS.find((model) => model.id === id);
 }
 
 export function isSupportedChatModel(id: string): id is SupportedChatModelId {
-  return SUPPORTED_CHAT_MODELS.some((m) => m.id === id);
+  return findSupportedChatModel(id) !== undefined;
 }

@@ -1,8 +1,9 @@
 import { SUPPORTED_CHAT_MODELS } from "shared";
 import type { Command } from "./types.js";
-import { 
+import {
   AgentsDialogContent,
   ModelsDialogContent,
+  ThinkingDialogContent,
   SessionsDialogContent,
   ThemeDialogContent,
 } from "../dialogs/index.js";
@@ -20,13 +21,29 @@ export const COMMANDS: Command[] = [
     },
   },
   {
+    name: "thinking",
+    description: "Set model reasoning effort",
+    value: "/thinking",
+    action: (ctx) => {
+      ctx.dialog.open({
+        title: "Select Thinking Level",
+        children: <ThinkingDialogContent onSelect={ctx.setThinkingLevel} />,
+      });
+    },
+  },
+  {
     name: "agents",
     description: "Switch agents",
     value: "/agents",
     action: (ctx) => {
       ctx.dialog.open({
         title: "Select Agent",
-        children: <AgentsDialogContent currentMode={ctx.mode} onSelectMode={ctx.setMode} />,
+        children: (
+          <AgentsDialogContent
+            currentMode={ctx.mode}
+            onSelectMode={ctx.setMode}
+          />
+        ),
       });
     },
   },

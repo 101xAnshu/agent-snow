@@ -7,13 +7,15 @@ import {
   type ReactNode,
 } from "react";
 import { Mode, DEFAULT_CHAT_MODEL_ID } from "shared";
-import type { ModeType, SupportedChatModelId } from "shared";
+import type { ModeType, SupportedChatModelId, ThinkingLevel } from "shared";
 
 type PromptConfigValue = {
   mode: ModeType;
   model: SupportedChatModelId;
   setMode: (m: ModeType) => void;
   setModel: (m: SupportedChatModelId) => void;
+  thinkingLevel: ThinkingLevel;
+  setThinkingLevel: (level: ThinkingLevel) => void;
   toggleMode: () => void;
   contextTokens: number;
   setContextTokens: (tokens: number) => void;
@@ -27,13 +29,24 @@ export function PromptConfigProvider({ children }: { children: ReactNode }) {
     DEFAULT_CHAT_MODEL_ID,
   );
   const [contextTokens, setContextTokens] = useState(0);
+  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("off");
   const toggleMode = useCallback(
     () => setMode((prev) => (prev === Mode.BUILD ? Mode.PLAN : Mode.BUILD)),
     [],
   );
   const value = useMemo(
-    () => ({ mode, model, setMode, setModel, toggleMode, contextTokens, setContextTokens }),
-    [mode, model, contextTokens],
+    () => ({
+      mode,
+      model,
+      setMode,
+      setModel,
+      thinkingLevel,
+      setThinkingLevel,
+      toggleMode,
+      contextTokens,
+      setContextTokens,
+    }),
+    [mode, model, thinkingLevel, contextTokens],
   );
   return (
     <PromptConfigContext.Provider value={value}>

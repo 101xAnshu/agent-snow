@@ -4,7 +4,7 @@ import { usePromptConfig } from "../providers/prompt-config/index.js";
 import { findSupportedChatModel, Mode } from "shared";
 
 export function StatusBar() {
-  const { mode, model, contextTokens } = usePromptConfig();
+  const { mode, model, thinkingLevel, contextTokens } = usePromptConfig();
   const { colors } = useTheme();
 
   return (
@@ -17,8 +17,12 @@ export function StatusBar() {
         ›
       </text>
       <text>{model}</text>
+      <text attributes={TextAttributes.DIM}>thinking {thinkingLevel}</text>
       <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
-        {contextTokens.toLocaleString()} / {(findSupportedChatModel(model)?.meta.contextWindow ?? 0).toLocaleString()}
+        {contextTokens.toLocaleString()} /{" "}
+        {(
+          findSupportedChatModel(model)?.meta.contextWindow ?? 0
+        ).toLocaleString()}
       </text>
     </box>
   );

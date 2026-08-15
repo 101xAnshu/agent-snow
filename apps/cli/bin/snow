@@ -5,17 +5,34 @@ import path from "path";
 dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
 
 const args = process.argv.slice(2);
-const promptIndex = args.indexOf("-p");
-if (promptIndex !== -1) {
-  const { parseHeadlessArgs, runHeadless } = await import("../src/headless.ts");
+if (args[0] === "update" && args.includes("--models")) {
+  const { updateModels } = await import("../src/update-models.ts");
   try {
-    const options = parseHeadlessArgs(args);
-    if (!options) throw new Error("Missing headless options");
-    await runHeadless(options);
+    const result = await updateModels();
+    process.stdout.write(`Updated ${result.count} models in ${result.path}\n`);
+    for (const warning of result.warnings) process.stderr.write(`${warning}\n`);
   } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
+    );
     process.exitCode = 1;
   }
 } else {
-  await import("../src/index.tsx");
+  const promptIndex = args.indexOf("-p");
+  if (promptIndex !== -1) {
+    const { parseHeadlessArgs, runHeadless } =
+      await import("../src/headless.ts");
+    try {
+      const options = parseHeadlessArgs(args);
+      if (!options) throw new Error("Missing headless options");
+      await runHeadless(options);
+    } catch (error) {
+      process.stderr.write(
+        `${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      process.exitCode = 1;
+    }
+  } else {
+    await import("../src/index.tsx");
+  }
 }

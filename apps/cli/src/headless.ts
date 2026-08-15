@@ -1,6 +1,11 @@
 import { runAgent } from "agent";
-import { Mode, modeSchema, isSupportedChatModel, DEFAULT_CHAT_MODEL_ID } from "shared";
-import type { ModeType } from "shared";
+import {
+  Mode,
+  modeSchema,
+  isSupportedChatModel,
+  DEFAULT_CHAT_MODEL_ID,
+} from "shared";
+import type { ModeType, ThinkingLevel } from "shared";
 
 export const HEADLESS_PROTOCOL_VERSION = 1;
 
@@ -8,6 +13,7 @@ export type HeadlessOptions = {
   prompt: string;
   mode?: ModeType;
   model?: string;
+  thinkingLevel?: ThinkingLevel;
   cwd?: string;
   maxSteps?: number;
   emit?: (event: Record<string, unknown>) => void;
@@ -28,12 +34,18 @@ export function parseHeadlessArgs(argv: string[]): ParsedHeadlessArgs | null {
     return index === -1 ? undefined : argv[index + 1];
   };
   const output = valueAfter("--output") ?? "json";
-  if (output !== "json") throw new Error(`Unsupported output format: ${output}`);
+  if (output !== "json")
+    throw new Error(`Unsupported output format: ${output}`);
   const rawMode = valueAfter("--agent-mode");
   const mode = rawMode ? modeSchema.parse(rawMode) : Mode.BUILD;
   const model = valueAfter("--model") ?? DEFAULT_CHAT_MODEL_ID;
-  if (!isSupportedChatModel(model)) throw new Error(`Unsupported model: ${model}`);
+  if (!isSupportedChatModel(model))
+    throw new Error(`Unsupported model: ${model}`);
   const rawMaxSteps = valueAfter("--max-steps");
+  const rawThinking = valueAfter("--thinking") ?? "off";
+  if (!["off", "low", "medium", "high"].includes(rawThinking)) {
+    throw new Error("--thinking must be off, low, medium, or high");
+  }
   const maxSteps = rawMaxSteps === undefined ? undefined : Number(rawMaxSteps);
   if (maxSteps !== undefined && (!Number.isInteger(maxSteps) || maxSteps < 1)) {
     throw new Error("--max-steps must be a positive integer");
@@ -43,6 +55,7 @@ export function parseHeadlessArgs(argv: string[]): ParsedHeadlessArgs | null {
     prompt,
     mode,
     model,
+    thinkingLevel: rawThinking as ThinkingLevel,
     cwd: valueAfter("--cwd"),
     maxSteps,
     output: "json",
@@ -50,11 +63,17 @@ export function parseHeadlessArgs(argv: string[]): ParsedHeadlessArgs | null {
 }
 
 export async function runHeadless(options: HeadlessOptions): Promise<void> {
-  const emit = options.emit ?? ((event) => process.stdout.write(`${JSON.stringify(event)}\n`));
+  const emit =
+    options.emit ??
+    ((event) => process.stdout.write(`${JSON.stringify(event)}\n`));
   const result = await runAgent({
     ...options,
     onEvent: (event) =>
-      emit({ protocol: "snow.agent", version: HEADLESS_PROTOCOL_VERSION, event }),
+      emit({
+        protocol: "snow.agent",
+        version: HEADLESS_PROTOCOL_VERSION,
+        event,
+      }),
   });
   const finishEvent = result.events.at(-1);
   emit({

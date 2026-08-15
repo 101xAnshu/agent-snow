@@ -8,8 +8,8 @@ import {
   isStepCount,
 } from "ai";
 import { getDb } from "db";
-import { calculateCredits, modeSchema } from "shared";
-import type { ModeType } from "shared";
+import { calculateCredits, modeSchema, isSupportedChatModel } from "shared";
+import type { ModeType, ThinkingLevel } from "shared";
 import { compactMessagesForContext, createAgentDefinition } from "agent";
 import { findSupportedChatModel } from "shared";
 import type { AuthenticatedEnv } from "../middleware/require-auth.js";
@@ -30,7 +30,11 @@ export const chatRequestSchema = z.object({
     }),
   ),
   mode: modeSchema,
-  model: z.string().default("claude-opus-4-6"),
+  model: z
+    .string()
+    .refine(isSupportedChatModel, "Unsupported model")
+    .default("claude-opus-4-6"),
+  thinkingLevel: z.enum(["off", "low", "medium", "high"]).default("off"),
 });
 
 chatRoutes.post(
@@ -40,7 +44,7 @@ chatRoutes.post(
   async (c) => {
     const db = getDb();
     const userId = c.var.userId;
-    const { id, messages, mode, model } = c.req.valid("json");
+    const { id, messages, mode, model, thinkingLevel } = c.req.valid("json");
 
     // Verify session ownership
     const session = await db.session.findUnique({
@@ -50,20 +54,27 @@ chatRoutes.post(
     if (!session) return c.json({ error: "Session not found" }, 404);
 
     // Merge incoming messages with persisted messages
-    const definition = createAgentDefinition(mode as ModeType, model);
+    const definition = createAgentDefinition(
+      mode as ModeType,
+      model,
+      thinkingLevel as ThinkingLevel,
+    );
     const tools = definition.tools;
     const storedMessages = await db.message.findMany({
       where: { sessionId: id },
       orderBy: { createdAt: "asc" },
     });
-    const previousMessages = storedMessages.length > 0
-      ? storedMessages
-      : Array.isArray(session.messages) ? session.messages : [];
+    const previousMessages =
+      storedMessages.length > 0
+        ? storedMessages
+        : Array.isArray(session.messages)
+          ? session.messages
+          : [];
     const mergedMessages = [
       ...(previousMessages as Array<Record<string, unknown>>),
     ];
     for (const msg of messages) {
-      const entry = { ...msg, metadata: { mode, model } };
+      const entry = { ...msg, metadata: { mode, model, thinkingLevel } };
       const idx = mergedMessages.findIndex(
         (m) => (m as Record<string, unknown>).id === msg.id,
       );
@@ -72,7 +83,8 @@ chatRoutes.post(
     }
 
     // Validate UI messages and convert to model messages
-    const contextWindow = findSupportedChatModel(model)?.meta.contextWindow ?? 200_000;
+    const contextWindow =
+      findSupportedChatModel(model)?.meta.contextWindow ?? 200_000;
     const compacted = compactMessagesForContext(mergedMessages, contextWindow);
     const validMessages = await validateUIMessages({
       messages: compacted.messages,
@@ -98,11 +110,12 @@ chatRoutes.post(
     return result.toUIMessageStreamResponse({
       originalMessages: validMessages,
       messageMetadata({ part }) {
-        if (part.type === "start") return { mode, model };
+        if (part.type === "start") return { mode, model, thinkingLevel };
         if (part.type !== "finish") return undefined;
         return {
           mode,
           model,
+          thinkingLevel,
           contextTokens: compacted.estimatedTokens,
           contextWindow,
           compacted: compacted.compacted,
@@ -126,7 +139,10 @@ chatRoutes.post(
             }));
           if (rows.length > 0) {
             await db.message.createMany({ data: rows, skipDuplicates: true });
-            await db.session.update({ where: { id, userId }, data: { updatedAt: new Date() } });
+            await db.session.update({
+              where: { id, userId },
+              data: { updatedAt: new Date() },
+            });
           }
 
           if (completedUsage) {

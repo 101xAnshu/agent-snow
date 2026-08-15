@@ -6,7 +6,7 @@ import {
 } from "ai";
 import { loadAuth } from "../lib/auth.js";
 import { executeLocalTool } from "agent";
-import type { ModeType, SupportedChatModelId } from "shared";
+import type { ModeType, SupportedChatModelId, ThinkingLevel } from "shared";
 import { useDialog } from "../providers/dialog/index.js";
 import { resolveApproval, resolveModeFromMetadata } from "../lib/approval.js";
 
@@ -46,13 +46,15 @@ export function useChat({ sessionId, initialMessages }: UseChatProps) {
         prepareSendMessagesRequest({ messages }) {
           const lastMsg = messages[messages.length - 1];
           const meta = lastMsg?.metadata as
-            { mode?: string; model?: string } | undefined;
+            | { mode?: string; model?: string; thinkingLevel?: ThinkingLevel }
+            | undefined;
           return {
             body: {
               id: sessionId,
               messages,
               mode: resolveModeFromMetadata(meta?.mode),
               model: meta?.model ?? "claude-opus-4-6",
+              thinkingLevel: meta?.thinkingLevel ?? "off",
             },
           };
         },
@@ -104,12 +106,17 @@ export function useChat({ sessionId, initialMessages }: UseChatProps) {
       userText,
       mode,
       model,
+      thinkingLevel,
     }: {
       userText: string;
       mode: ModeType;
       model: SupportedChatModelId;
+      thinkingLevel: ThinkingLevel;
     }) => {
-      chat.sendMessage({ text: userText, metadata: { mode, model } });
+      chat.sendMessage({
+        text: userText,
+        metadata: { mode, model, thinkingLevel },
+      });
     },
     abort: chat.stop,
     interrupt: chat.stop,

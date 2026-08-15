@@ -22,7 +22,7 @@ const locationStateSchema = z.object({
 export function Session() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
-  const { mode, model, setContextTokens } = usePromptConfig();
+  const { mode, model, thinkingLevel, setContextTokens } = usePromptConfig();
   const { isTopLayer } = useKeyboardLayer();
   const [initialLoading, setInitialLoading] = useState(true);
   const [dbMessages, setDbMessages] = useState<Array<
@@ -53,8 +53,10 @@ export function Session() {
   const chat = useChat({ sessionId: id ?? "", initialMessages });
 
   useEffect(() => {
-    const last = chat.messages.at(-1)?.metadata as { contextTokens?: number } | undefined;
-    if (typeof last?.contextTokens === "number") setContextTokens(last.contextTokens);
+    const last = chat.messages.at(-1)?.metadata as
+      { contextTokens?: number } | undefined;
+    if (typeof last?.contextTokens === "number")
+      setContextTokens(last.contextTokens);
   }, [chat.messages, setContextTokens]);
 
   useEffect(() => {
@@ -65,13 +67,19 @@ export function Session() {
 
   useEffect(() => {
     if (state.initialMessage && chat.messages.length === 0) {
-      chat.submit({ userText: state.initialMessage, mode, model });
+      chat.submit({
+        userText: state.initialMessage,
+        mode,
+        model,
+        thinkingLevel,
+      });
     }
-  }, [state.initialMessage, mode, model, chat]);
+  }, [state.initialMessage, mode, model, thinkingLevel, chat]);
 
   const handleSubmit = useCallback(
-    (text: string) => chat.submit({ userText: text, mode, model }),
-    [chat, mode, model],
+    (text: string) =>
+      chat.submit({ userText: text, mode, model, thinkingLevel }),
+    [chat, mode, model, thinkingLevel],
   );
 
   // Handle escape key to interrupt streaming
@@ -88,11 +96,7 @@ export function Session() {
 
   if (initialLoading) {
     return (
-      <SessionShell
-        onSubmit={handleSubmit}
-        inputDisabled
-        loading
-      >
+      <SessionShell onSubmit={handleSubmit} inputDisabled loading>
         <text>Loading session...</text>
       </SessionShell>
     );
@@ -106,7 +110,8 @@ export function Session() {
     >
       {chat.messages.map((msg) => {
         const meta = msg.metadata as
-          { mode?: "PLAN" | "BUILD"; model?: string; durationMs?: number } | undefined;
+          | { mode?: "PLAN" | "BUILD"; model?: string; durationMs?: number }
+          | undefined;
         if (msg.role === "user")
           return (
             <UserMessage

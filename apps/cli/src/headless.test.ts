@@ -22,6 +22,7 @@ describe("headless arguments", () => {
       output: "json",
       mode: Mode.PLAN,
       model: "claude-opus-4-6",
+      thinkingLevel: "off",
       cwd: ".",
       maxSteps: 4,
     });

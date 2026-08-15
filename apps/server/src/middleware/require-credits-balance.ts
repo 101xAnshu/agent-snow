@@ -2,9 +2,22 @@ import { createMiddleware } from "hono/factory";
 import { getAvailableCredits } from "../lib/polar.js";
 import type { AuthenticatedEnv } from "./require-auth.js";
 import { logger } from "../lib/logger.js";
+import { findSupportedChatModel } from "shared";
 
 export const requireCreditsBalance = createMiddleware<AuthenticatedEnv>(
   async (c, next) => {
+    try {
+      const body = (await c.req.raw.clone().json()) as { model?: string };
+      if (
+        body.model &&
+        findSupportedChatModel(body.model)?.provider === "ollama"
+      ) {
+        await next();
+        return;
+      }
+    } catch {
+      // The route validator remains responsible for malformed request bodies.
+    }
     const userId = c.var.userId;
     try {
       const balance = await getAvailableCredits(userId);

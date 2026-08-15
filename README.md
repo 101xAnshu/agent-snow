@@ -20,15 +20,15 @@ between both layers.
 
 ## Tech stack
 
-| Layer | Technology |
-|-------|------------|
-| Runtime | Bun |
-| TUI | OpenTUI, React 19, React Router 8 |
-| AI SDK | Vercel AI SDK 7 |
-| Server | Hono |
-| Database | PostgreSQL, Prisma 7 |
-| Auth | GitHub OAuth, JWT, PKCE |
-| Billing | Polar.sh |
+| Layer    | Technology                        |
+| -------- | --------------------------------- |
+| Runtime  | Bun                               |
+| TUI      | OpenTUI, React 19, React Router 8 |
+| AI SDK   | Vercel AI SDK 7                   |
+| Server   | Hono                              |
+| Database | PostgreSQL, Prisma 7              |
+| Auth     | GitHub OAuth, JWT, PKCE           |
+| Billing  | Polar.sh                          |
 
 ## Features
 
@@ -49,7 +49,7 @@ flowchart LR
     User[User] --> CLI[CLI - OpenTUI + React]
     CLI --> Server[Hono API]
     CLI --> Tools[Local Tools]
-    Server --> Models[Claude / GPT / Gemini]
+    Server --> Models[Claude / GPT / Gemini / OpenRouter / Ollama]
     Server --> DB[(PostgreSQL)]
     Server --> Polar[Polar]
     CLI --> Agent[Shared Agent Definition]
@@ -83,18 +83,19 @@ bun --filter cli dev      # Terminal 2: TUI
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| /new | Start a new conversation |
-| /agents | Select BUILD or PLAN mode |
-| /models | Select an AI model |
-| /sessions | Browse past sessions |
-| /theme | Change color theme |
-| /login | Sign in with GitHub |
-| /logout | Clear the current login |
-| /upgrade | Purchase credits |
-| /usage | Open the Polar billing portal |
-| /exit | Quit AgentSnow |
+| Command   | Description                   |
+| --------- | ----------------------------- |
+| /new      | Start a new conversation      |
+| /agents   | Select BUILD or PLAN mode     |
+| /models   | Select an AI model            |
+| /thinking | Select model reasoning effort |
+| /sessions | Browse past sessions          |
+| /theme    | Change color theme            |
+| /login    | Sign in with GitHub           |
+| /logout   | Clear the current login       |
+| /upgrade  | Purchase credits              |
+| /usage    | Open the Polar billing portal |
+| /exit     | Quit AgentSnow                |
 
 ## Repository structure
 
@@ -137,11 +138,17 @@ bun --filter harness eval          # Run all fixtures (needs a model API key)
 Automation can run the real agent without starting the TUI:
 
 ```bash
-bun --filter cli headless -p "Inspect the project" --output json --agent-mode PLAN --cwd .
+bun --filter cli headless -p "Inspect the project" --output json --agent-mode PLAN --thinking low --cwd .
 ```
 
 The command emits versioned JSON lines to stdout. Diagnostics go to stderr.
 The exported `runHeadless` function provides the same protocol to Bun scripts.
+
+Run `snow update --models` to refresh OpenRouter models and models installed in
+the local Ollama service. The catalog is stored in `~/.snow/models.json` and is
+loaded on the next CLI or server start. Set `OPENROUTER_API_KEY` for OpenRouter;
+Ollama defaults to `http://localhost:11434` and can be changed with
+`OLLAMA_BASE_URL`.
 
 ## Why build this
 

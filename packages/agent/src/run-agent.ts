@@ -1,7 +1,7 @@
 import { streamText, isStepCount } from "ai";
 import type { LanguageModel, LanguageModelUsage, ModelMessage } from "ai";
 import { Mode, DEFAULT_CHAT_MODEL_ID } from "shared";
-import type { ModeType } from "shared";
+import type { ModeType, ThinkingLevel } from "shared";
 import { createAgentDefinition } from "./definition.js";
 import { executeLocalTool } from "./local-tools.js";
 
@@ -27,6 +27,7 @@ export type RunAgentOptions = {
   messages?: ModelMessage[];
   mode?: ModeType;
   model?: string;
+  thinkingLevel?: ThinkingLevel;
   cwd?: string;
   maxSteps?: number;
   abortSignal?: AbortSignal;
@@ -58,8 +59,7 @@ type ToolResultPart = {
   toolCallId: string;
   toolName: string;
   output:
-    | { type: "text"; value: string }
-    | { type: "error-text"; value: string };
+    { type: "text"; value: string } | { type: "error-text"; value: string };
 };
 
 function emptyUsage(): Usage {
@@ -76,13 +76,12 @@ function emptyUsage(): Usage {
   };
 }
 
-export async function runAgent(
-  options: RunAgentOptions,
-): Promise<AgentResult> {
+export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const {
     prompt,
     mode = Mode.BUILD,
     model = DEFAULT_CHAT_MODEL_ID,
+    thinkingLevel = "off",
     cwd,
     maxSteps = 10,
     abortSignal,
@@ -91,7 +90,7 @@ export async function runAgent(
     onApprovalRequired,
   } = options;
 
-  const definition = createAgentDefinition(mode, model);
+  const definition = createAgentDefinition(mode, model, thinkingLevel);
   const languageModel = injectedLanguageModel ?? definition.model;
   const providerOptions = definition.providerOptions;
   const tools = definition.tools as any;
@@ -206,9 +205,7 @@ export async function runAgent(
           tc.input,
           mode,
           cwd,
-          onApprovalRequired
-            ? { onApprovalRequired }
-            : { trusted: true },
+          onApprovalRequired ? { onApprovalRequired } : { trusted: true },
         );
         emit({
           type: "tool-output",

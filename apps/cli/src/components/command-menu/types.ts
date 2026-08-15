@@ -1,4 +1,4 @@
-import type { ModeType } from "shared";
+import type { ModeType, ThinkingLevel } from "shared";
 import type { SupportedChatModelId } from "shared";
 import type { useDialog } from "../../providers/dialog/index.js";
 import type { useToast } from "../../providers/toast/index.js";
@@ -12,6 +12,7 @@ export type CommandContext = {
   mode: ModeType;
   setMode: (mode: ModeType) => void;
   setModel: (model: SupportedChatModelId) => void;
+  setThinkingLevel: (level: ThinkingLevel) => void;
 };
 
 export type Command = {

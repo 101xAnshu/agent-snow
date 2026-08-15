@@ -1,29 +1,62 @@
 import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
+import { createOpenAI, openai } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
-import { isSupportedChatModel } from "shared";
+import { findSupportedChatModel, isSupportedChatModel } from "shared";
+import type { ThinkingLevel } from "shared";
 
-export function resolveModel(modelId: string): { model: LanguageModel; providerOptions?: Record<string, unknown> } {
-  if (!isSupportedChatModel(modelId)) {
-    throw new Error(`Unsupported model: ${modelId}`);
+export function getApiKey(provider: string): string | undefined {
+  return process.env[`${provider.toUpperCase()}_API_KEY`];
+}
+
+function thinkingOptions(provider: string, level: ThinkingLevel) {
+  if (level === "off") return undefined;
+  const budget = { low: 2_000, medium: 8_000, high: 16_000 }[level];
+  if (provider === "anthropic") {
+    return {
+      anthropic: { thinking: { type: "enabled", budgetTokens: budget } },
+    };
   }
+  if (provider === "openai") return { openai: { reasoningEffort: level } };
+  if (provider === "google") {
+    return { google: { thinkingConfig: { thinkingBudget: budget } } };
+  }
+  return undefined;
+}
 
-  const [provider] = modelId.split("-") as [string];
+export function resolveModel(
+  modelId: string,
+  thinkingLevel: ThinkingLevel = "off",
+): { model: LanguageModel; providerOptions?: Record<string, unknown> } {
+  if (!isSupportedChatModel(modelId))
+    throw new Error(`Unsupported model: ${modelId}`);
 
-  switch (provider) {
-    case "claude":
-      return {
-        model: anthropic(modelId),
-        providerOptions: modelId.includes("opus") || modelId.includes("sonnet")
-          ? { anthropic: { thinking: { type: "enabled", budgetTokens: 10_000 } } }
-          : undefined,
-      };
-    case "gpt":
-      return { model: openai(modelId) };
-    case "gemini":
-      return { model: google(modelId) };
-    default:
-      throw new Error(`Unknown provider for model: ${modelId}`);
+  const definition = findSupportedChatModel(modelId)!;
+  const providerModelId = definition.providerModelId ?? modelId;
+  const providerOptions = thinkingOptions(definition.provider, thinkingLevel);
+
+  switch (definition.provider) {
+    case "anthropic":
+      return { model: anthropic(providerModelId), providerOptions };
+    case "openai":
+      return { model: openai(providerModelId), providerOptions };
+    case "google":
+      return { model: google(providerModelId), providerOptions };
+    case "openrouter": {
+      const provider = createOpenAI({
+        apiKey: getApiKey("openrouter"),
+        baseURL: "https://openrouter.ai/api/v1",
+        name: "openrouter",
+      });
+      return { model: provider(providerModelId) };
+    }
+    case "ollama": {
+      const provider = createOpenAI({
+        apiKey: getApiKey("ollama") ?? "ollama",
+        baseURL: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1",
+        name: "ollama",
+      });
+      return { model: provider(providerModelId) };
+    }
   }
 }
