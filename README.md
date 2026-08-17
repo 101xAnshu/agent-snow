@@ -32,31 +32,10 @@ Those are the parts of this repo worth reading.
 
 ```mermaid
 flowchart LR
-    subgraph Entry[Entry points]
-        direction TB
-        Developer([Developer])
-        Scripts[Headless scripts]
-        Harness[Eval harness]
-    end
-
-    subgraph Runtime[Execution paths]
-        direction TB
-        CLI[OpenTUI CLI] <-->|HTTP streaming| Server[Hono server]
-        Agent[runAgent]
-    end
-
-    subgraph Dependencies[Runtime dependencies]
-        direction TB
-        Tools[Local tools]
-        Providers[Model providers]
-        Database[(PostgreSQL)]
-        Polar[Polar billing]
-    end
-
-    Developer --> CLI
-    Scripts --> Agent
-    Harness --> Agent
-
+    Developer([Developer]) --> CLI[OpenTUI CLI]
+    CLI <-->|HTTP streaming| Server[Hono server]
+    Scripts[Headless scripts] --> Agent[runAgent]
+    Harness[Eval harness] --> Agent
     CLI --> Tools
     Agent --> Tools
     Server --> Providers
